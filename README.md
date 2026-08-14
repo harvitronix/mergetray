@@ -1,23 +1,20 @@
 # MergeTray
 
-MergeTray helps you track, build, and deploy PRs across repos, faster,
-by treating your PRs like a proper inbox. 
-It's like a Mission Control for you and your teams' open PRs.
+MergeTray is a dashboard for your PRs. Know what needs your attention
+quickly, across all PRs across all your repos, so you can deploy faster.
 
 ## Features
 
-- Makes keeping tracking of dozens of PRs across dozens of repos enjoyable
-- Snooze, keep an eye on CI checks, see PR size and timeline at a glance
-- Mark PRs as Handled, don't see them again until they need attention
-- See what's ready for your attention, ignore, snooze or "Handle" what's not
-- Fully local - no cloud anything, just runs on your machine
-- No deep integrations - don't need a GitHub app or token, just use your CLI
-- Real-time updates - listens to webhooks (optional) and syncs every 5 minutes (dfault + fallback)
+- Makes tracking many PRs across multiple repos enjoyable (or at least tractable)
+- See what needs your attention quicky, then Handle or Snooze until it's needed again
+- Fully local - just runs on your machine
+- No deep integrations - uses your existing CLIs
+- Real-time updates - listens to webhooks (optional) and syncs every 5 minutes (default + fallback)
 - Small Codex (ChatGPT) tie-in - open session threads from MergeTray locally
 
 ## Why not (some other tool)?
 
-- GitHub Inbox - honesty, it's terrible
+- GitHub Inbox - honestly, it's terrible
 - Linear Inbox - it's generally good, but doesn't give me all the info I want up front
 - Graphite - same, this is my favorite of the bunch, but I want more info at a glance
 
@@ -80,8 +77,10 @@ MergeTray gets a token from the active `gh` session when making GitHub requests
 but does not save that token in SQLite. GitHub CLI owns credential storage; run
 `gh auth status` to inspect the active account and storage location.
 
-MergeTray does not write anything to GitHub, it only reads. All data it needs
-is stored locally in the SQLite database.
+MergeTray's normal polling only reads from GitHub. Optional webhook forwarding
+installs the `cli/gh-webhook` GitHub CLI extension when needed and creates
+repository or organization webhook configuration through GitHub's forwarding
+service. All application data is stored locally in the SQLite database.
 
 ## GitHub access and scopes
 
