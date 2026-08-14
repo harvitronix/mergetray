@@ -1,7 +1,11 @@
 # MergeTray
 
+<img src="public/mergetray-mascot-card.png" alt="MergeTray mascot" width="128" align="left">
+
 MergeTray is a dashboard for your PRs. Know what needs your attention
 quickly, across all your repositories, so you can deploy faster.
+
+<br clear="left">
 
 ![MergeTray inbox with grouped pull requests](docs/mergetray-inbox.png)
 
