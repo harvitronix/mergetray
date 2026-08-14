@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { getDatabase, id, integer, setting } from "@/lib/database";
 import { inboxRuleStaleThresholdMs, isBot } from "@/lib/inbox-section-rules";
 import type {
@@ -215,7 +216,7 @@ export function listRepositories() {
   ).map(repository);
 }
 
-export function listInboxRows(repositoryId?: string): InboxRow[] {
+function loadInboxRows(repositoryId?: string): InboxRow[] {
   wakeExpiredSnoozes();
   const db = getDatabase();
   const viewerId = setting("github_user_id");
@@ -324,8 +325,9 @@ export function listInboxRows(repositoryId?: string): InboxRow[] {
   });
 }
 
-export function inboxCounts() {
-  const rows = listInboxRows();
+export const listInboxRows = cache(loadInboxRows);
+
+export function inboxCounts(rows = listInboxRows()) {
   const repositories = new Map<string, number>();
   let all = 0;
   for (const row of rows) {

@@ -9,7 +9,11 @@ import {
   githubSyncNeeded,
   githubSyncState,
 } from "@/lib/github-sync";
-import { inboxCounts, listRepositories } from "@/lib/inbox-store";
+import {
+  inboxCounts,
+  listInboxRows,
+  listRepositories,
+} from "@/lib/inbox-store";
 import { appTheme, themeCookieName } from "@/lib/theme";
 import { AppNav } from "./app-nav";
 import { BackgroundSync } from "./background-sync";
@@ -17,7 +21,8 @@ import { BackgroundSync } from "./background-sync";
 export default async function AppLayout({ children }: { children: ReactNode }) {
   await connection();
   const theme = appTheme((await cookies()).get(themeCookieName)?.value);
-  const counts = inboxCounts();
+  const rows = listInboxRows();
+  const counts = inboxCounts(rows);
   const repositories = listRepositories();
   const syncState = githubSyncState();
 

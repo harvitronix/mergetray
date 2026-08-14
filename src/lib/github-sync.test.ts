@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { closeDatabase } from "./database.ts";
 import {
+  githubDataRevision,
   syncGithub,
   syncGithubItem,
   upsertSelectedRepository,
@@ -100,6 +101,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   closeDatabase();
   delete process.env.MERGETRAY_DATA_DIR;
@@ -108,15 +110,19 @@ afterEach(() => {
 
 describe("GitHub polling", () => {
   test("does not hydrate an unchanged PR again", async () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(1_000);
     await syncGithub(true);
+    const revisionAfterFirstSync = githubDataRevision();
     const detailRequestsAfterFirstSync = requests.filter((url) =>
       /pulls\/7(?:\/requested_reviewers|\/reviews|\/commits|$)|issues\/7\/timeline/.test(
         url,
       ),
     ).length;
 
+    now.mockReturnValue(2_000);
     await syncGithub(true);
 
+    expect(githubDataRevision()).toBe(revisionAfterFirstSync);
     expect(detailRequestsAfterFirstSync).toBe(3);
     expect(
       requests.filter((url) =>

@@ -2,10 +2,16 @@
 
 import { RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 
 const revisionCheckIntervalMs = 2_000;
 const githubSyncIntervalMs = 5 * 60_000;
+
+async function syncRevision() {
+  const response = await fetch("/api/sync", { method: "POST" });
+  if (!response.ok) return;
+  return (await response.json()) as { revision: number; failed: boolean };
+}
 
 export function BackgroundSync({
   enabled,
@@ -16,7 +22,17 @@ export function BackgroundSync({
 }) {
   const router = useRouter();
   const [refreshing, startTransition] = useTransition();
+  const [syncing, setSyncing] = useState(enabled);
   const revision = useRef(githubRevision);
+
+  const refreshForRevision = useCallback(
+    (nextRevision: number, force = false) => {
+      const changed = nextRevision !== revision.current;
+      revision.current = nextRevision;
+      if (changed || force) startTransition(() => router.refresh());
+    },
+    [router],
+  );
 
   useEffect(() => {
     revision.current = githubRevision;
@@ -26,20 +42,22 @@ export function BackgroundSync({
     if (!enabled) return;
     let active = true;
 
-    void fetch("/api/sync", { method: "POST" })
+    void syncRevision()
       .catch(() => undefined)
-      .then(() => {
-        if (!active) return;
-        startTransition(() => router.refresh());
+      .then((result) => {
+        if (active && result)
+          refreshForRevision(result.revision, result.failed);
+      })
+      .finally(() => {
+        if (active) setSyncing(false);
       });
 
     return () => {
       active = false;
     };
-  }, [enabled, router]);
+  }, [enabled, refreshForRevision]);
 
   useEffect(() => {
-    if (enabled) return;
     let checking = false;
 
     async function refreshForWebhookUpdate() {
@@ -51,9 +69,7 @@ export function BackgroundSync({
         });
         if (!response.ok) return;
         const next = (await response.json()) as { revision: number };
-        if (next.revision === revision.current) return;
-        revision.current = next.revision;
-        startTransition(() => router.refresh());
+        refreshForRevision(next.revision);
       } catch {
         // The five-minute GitHub sync remains the recovery path.
       } finally {
@@ -66,17 +82,17 @@ export function BackgroundSync({
       revisionCheckIntervalMs,
     );
     return () => window.clearInterval(interval);
-  }, [enabled, router]);
+  }, [refreshForRevision]);
 
   useEffect(() => {
     let active = true;
 
     const interval = window.setInterval(() => {
-      void fetch("/api/sync", { method: "POST" })
+      void syncRevision()
         .catch(() => undefined)
-        .then(() => {
-          if (!active) return;
-          startTransition(() => router.refresh());
+        .then((result) => {
+          if (active && result)
+            refreshForRevision(result.revision, result.failed);
         });
     }, githubSyncIntervalMs);
 
@@ -84,9 +100,9 @@ export function BackgroundSync({
       active = false;
       window.clearInterval(interval);
     };
-  }, [router]);
+  }, [refreshForRevision]);
 
-  if (!enabled && !refreshing) return null;
+  if (!syncing && !refreshing) return null;
 
   return (
     <div
