@@ -48,6 +48,7 @@ type InboxSectionProps = {
   timeZone: string;
   selectionEnabled: boolean;
   selectedRowIds: ReadonlySet<InboxItemId>;
+  stackOrdinals: ReadonlyMap<InboxItemId, { position: number; total: number }>;
   updateStatus: (formData: FormData) => void | Promise<void>;
   snoozeItem: (formData: FormData) => void | Promise<void>;
   promoteToShipIt: (formData: FormData) => void | Promise<void>;
@@ -85,6 +86,7 @@ export function InboxSection({
   timeZone,
   selectionEnabled,
   selectedRowIds,
+  stackOrdinals,
   updateStatus,
   snoozeItem,
   promoteToShipIt,
@@ -174,6 +176,7 @@ export function InboxSection({
               row={row}
               sectionId={section.id}
               groupView={groupView}
+              stackOrdinal={stackOrdinals.get(row.item.id)}
               now={now}
               timeZone={timeZone}
               isTimelineExpanded={expandedRows[row.item.id] ?? false}

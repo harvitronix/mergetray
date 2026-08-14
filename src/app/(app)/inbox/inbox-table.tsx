@@ -190,6 +190,19 @@ export function InboxTable({
     groups[classifyInboxSection(row, now)].push(row);
     return groups;
   }, emptyRowsByGroup());
+  const stackOrdinals = new Map(
+    groupInboxRows(filteredRows, now).flatMap((group) =>
+      group.rows.length > 1
+        ? group.rows.map(
+            (row, index) =>
+              [
+                row.item.id,
+                { position: index + 1, total: group.rows.length },
+              ] as const,
+          )
+        : [],
+    ),
+  );
   const visualRows = groupInboxRows(
     visibleRows.filter((row) =>
       listView === "done" ? isDone(row) : !isDone(row),
@@ -399,6 +412,7 @@ export function InboxTable({
               timeZone={timeZone}
               selectionEnabled={isSelectionMode}
               selectedRowIds={selectedRowIds}
+              stackOrdinals={stackOrdinals}
               updateStatus={updateStatus}
               snoozeItem={snoozeItem}
               promoteToShipIt={promoteToShipIt}
