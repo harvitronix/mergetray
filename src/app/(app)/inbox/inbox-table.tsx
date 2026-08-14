@@ -131,7 +131,6 @@ export function InboxTable({
     toggleSelectionMode,
     toggleSnooze,
   } = useInboxController({
-    initialRefreshAt: now,
     updateStatus,
     snoozeItem,
     promoteToShipIt,
@@ -354,15 +353,15 @@ export function InboxTable({
           </div>
           <button
             type="button"
-            className="app-inset-surface inline-flex items-center justify-center gap-1.5 px-2.5 py-2 text-sm font-medium shadow-sm transition disabled:opacity-60"
+            className="app-inset-surface inline-flex size-9 items-center justify-center shadow-sm transition disabled:opacity-60"
             disabled={isRefreshing}
             onClick={refreshInbox}
-            title="Refresh inbox"
+            aria-label="Sync inbox"
+            title="Sync inbox"
           >
             <RefreshCw
               className={`size-3.5 ${isRefreshing ? "animate-spin" : ""}`}
             />
-            Refresh
           </button>
         </div>
         {!localGithubIdentityConfigured ? (

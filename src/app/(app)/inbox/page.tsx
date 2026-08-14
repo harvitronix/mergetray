@@ -32,7 +32,7 @@ export default async function InboxPage({
   const selectedAuthor = query.author?.replace(/^github:/, "") || undefined;
   const repositoryId = query.repo || undefined;
   const codexEnabled = codexIntegrationEnabled();
-  const rows = listInboxRows(repositoryId);
+  const rows = repositoryId ? listInboxRows(repositoryId) : listInboxRows();
   const inbox = codexEnabled ? attachAgentSessionLinks(rows) : rows;
   const repositories = listRepositories();
   const selectedRepository = repositoryId

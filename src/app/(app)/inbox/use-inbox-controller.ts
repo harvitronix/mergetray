@@ -1,32 +1,23 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import {
-  type FormEvent,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  useTransition,
-} from "react";
+import { type FormEvent, useCallback, useState, useTransition } from "react";
 import type { InboxRow } from "@/lib/models";
 import { localSnoozeTime, type SnoozeDuration } from "./inbox-snooze";
 
 const doneExitAnimationMs = 860;
-const automaticRefreshIntervalMs = 5 * 60 * 1000;
 const actionErrorMessage = "Couldn’t save that inbox change. Please try again.";
+const syncErrorMessage = "Couldn’t sync GitHub. Please try again.";
 
 type InboxItemId = InboxRow["item"]["id"];
 type InboxAction = (formData: FormData) => void | Promise<void>;
 
 export function useInboxController({
-  initialRefreshAt,
   updateStatus,
   snoozeItem,
   promoteToShipIt,
   setUserNote,
 }: {
-  initialRefreshAt: number;
   updateStatus: InboxAction;
   snoozeItem: InboxAction;
   promoteToShipIt: InboxAction;
@@ -34,7 +25,6 @@ export function useInboxController({
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const lastRefreshAt = useRef(initialRefreshAt);
   const [exitingRows, setExitingRows] = useState<
     Record<string, "done" | "snooze">
   >({});
@@ -48,7 +38,6 @@ export function useInboxController({
   const [actionError, setActionError] = useState<string | null>(null);
 
   const refreshNow = useCallback(() => {
-    lastRefreshAt.current = Date.now();
     setOpenSnoozeRow(null);
     setOpenNoteRow(null);
     router.refresh();
@@ -56,27 +45,21 @@ export function useInboxController({
 
   const refreshInbox = useCallback(() => {
     setActionError(null);
-    startTransition(refreshNow);
+    startTransition(async () => {
+      try {
+        const response = await fetch("/api/sync?force=1", { method: "POST" });
+        if (
+          !response.ok ||
+          ((await response.json()) as { failed: boolean }).failed
+        ) {
+          throw new Error(syncErrorMessage);
+        }
+        refreshNow();
+      } catch {
+        setActionError(syncErrorMessage);
+      }
+    });
   }, [refreshNow]);
-
-  const refreshInboxIfStale = useCallback(() => {
-    if (Date.now() - lastRefreshAt.current >= automaticRefreshIntervalMs) {
-      refreshInbox();
-    }
-  }, [refreshInbox]);
-
-  useEffect(() => {
-    function refreshWhenVisible() {
-      if (document.visibilityState === "visible") refreshInboxIfStale();
-    }
-
-    window.addEventListener("focus", refreshInboxIfStale);
-    document.addEventListener("visibilitychange", refreshWhenVisible);
-    return () => {
-      window.removeEventListener("focus", refreshInboxIfStale);
-      document.removeEventListener("visibilitychange", refreshWhenVisible);
-    };
-  }, [refreshInboxIfStale]);
 
   function restoreRows(inboxItemIds: InboxItemId[]) {
     setHiddenRows((rows) => {

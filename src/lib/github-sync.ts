@@ -429,19 +429,6 @@ async function refreshVolatilePullRequests(
       const live = data[`p${index}`];
       if (!live) return;
       const inboxItemId = id(stored.id as number);
-      const nextState = live.state.toLowerCase();
-      db.prepare(
-        `UPDATE inbox_items SET state = ?, closed_at = ?, last_synced_at = ?
-         WHERE id = ?`,
-      ).run(
-        nextState,
-        timestamp(live.closedAt) ?? timestamp(live.mergedAt) ?? null,
-        Date.now(),
-        inboxItemId,
-      );
-      db.prepare(
-        "UPDATE pull_request_details SET merged_at = ? WHERE inbox_item_id = ?",
-      ).run(timestamp(live.mergedAt) ?? null, inboxItemId);
 
       const reviews = live.reviews.nodes.map((entry) => ({
         state: entry.state,
@@ -511,31 +498,51 @@ async function refreshVolatilePullRequests(
       const previous = db
         .prepare("SELECT * FROM pull_request_statuses WHERE inbox_item_id = ?")
         .get(inboxItemId) as SqlRow | undefined;
-      const changed =
+      const rollupState =
+        live.statusCheckRollup?.state.toLowerCase() ?? "unknown";
+      const statusChanged =
         !previous ||
+        String(previous.rollup_state) !== rollupState ||
         integer(previous.failing_count as number) !== failingCount ||
         integer(previous.pending_count as number) !== pendingCount ||
         integer(previous.passing_count as number) !== passingCount ||
         String(previous.head_sha) !== live.headRefOid;
-      db.prepare(
-        `INSERT INTO pull_request_statuses(
-          inbox_item_id, head_sha, rollup_state, failing_count,
-          pending_count, passing_count, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(inbox_item_id) DO UPDATE SET
-          head_sha = excluded.head_sha, rollup_state = excluded.rollup_state,
-          failing_count = excluded.failing_count, pending_count = excluded.pending_count,
-          passing_count = excluded.passing_count, updated_at = excluded.updated_at`,
-      ).run(
-        inboxItemId,
-        live.headRefOid,
-        live.statusCheckRollup?.state.toLowerCase() ?? "unknown",
-        failingCount,
-        pendingCount,
-        passingCount,
-        Date.now(),
-      );
-      if (Date.parse(live.updatedAt) > Number(stored.updated_at) || changed) {
+      if (statusChanged) {
+        db.prepare(
+          `INSERT INTO pull_request_statuses(
+            inbox_item_id, head_sha, rollup_state, failing_count,
+            pending_count, passing_count, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(inbox_item_id) DO UPDATE SET
+            head_sha = excluded.head_sha, rollup_state = excluded.rollup_state,
+            failing_count = excluded.failing_count, pending_count = excluded.pending_count,
+            passing_count = excluded.passing_count, updated_at = excluded.updated_at`,
+        ).run(
+          inboxItemId,
+          live.headRefOid,
+          rollupState,
+          failingCount,
+          pendingCount,
+          passingCount,
+          Date.now(),
+        );
+      }
+      const updatedAt = Date.parse(live.updatedAt);
+      if (updatedAt > Number(stored.updated_at) || statusChanged) {
+        db.prepare(
+          `UPDATE inbox_items
+           SET state = ?, updated_at = ?, closed_at = ?, last_synced_at = ?
+           WHERE id = ?`,
+        ).run(
+          live.state.toLowerCase(),
+          updatedAt,
+          timestamp(live.closedAt) ?? timestamp(live.mergedAt) ?? null,
+          Date.now(),
+          inboxItemId,
+        );
+        db.prepare(
+          "UPDATE pull_request_details SET merged_at = ? WHERE inbox_item_id = ?",
+        ).run(timestamp(live.mergedAt) ?? null, inboxItemId);
         reactivate(inboxItemId, Date.now());
       }
     });
