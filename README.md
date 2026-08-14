@@ -1,15 +1,15 @@
 # MergeTray
 
 MergeTray is a dashboard for your PRs. Know what needs your attention
-quickly, across all PRs across all your repos, so you can deploy faster.
+quickly, across all your repositories, so you can deploy faster.
 
 ![MergeTray inbox with grouped pull requests](docs/mergetray-inbox.png)
 
 ## Features
 
 - Makes tracking many PRs across multiple repos enjoyable (or at least tractable)
-- See what needs your attention quicky, then Handle or Snooze until it's needed again
-- Fully local - just runs on your machine
+- See what needs your attention quickly, then Handle or Snooze until it's needed again
+- Runs locally and stores its data on your machine
 - No deep integrations - uses your existing CLIs
 - Real-time updates - listens to webhooks (optional) and syncs every 5 minutes (default + fallback)
 - Small Codex (ChatGPT) tie-in - open session threads from MergeTray locally
@@ -65,9 +65,10 @@ pnpm mergetray webhooks [--port 3002]
 
 MergeTray is a single-user local application. The
 supported `pnpm mergetray open` command binds the web server to `127.0.0.1`,
-and there is no MergeTray account, cloud database, telemetry, or
-application-level authentication. Do not expose the server to a network or put
-it behind a public reverse proxy.
+and there is no MergeTray account, cloud database, or application-level
+authentication. MergeTray does not implement its own telemetry; Next.js
+telemetry follows your local Next.js preference. Do not expose the server to a
+network or put it behind a public reverse proxy.
 
 MergeTray makes outbound requests to GitHub and, when enabled, uses GitHub's
 webhook forwarding service. Pull request metadata, cached GitHub responses,
