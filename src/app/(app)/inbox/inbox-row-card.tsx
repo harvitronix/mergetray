@@ -11,6 +11,7 @@ import {
   GitCommitHorizontal,
   GitPullRequest,
   GitPullRequestArrow,
+  Layers3,
   MessageSquare,
   PanelRightOpen,
   Pencil,
@@ -88,6 +89,7 @@ type InboxRowCardProps = {
   groupView: SectionView;
   visuallyIndicated?: boolean;
   stackPosition?: StackPosition;
+  stackOrdinal?: { position: number; total: number };
   now: number;
   timeZone: string;
   isTimelineExpanded: boolean;
@@ -317,6 +319,7 @@ export function InboxRowCard({
   groupView,
   visuallyIndicated = false,
   stackPosition,
+  stackOrdinal,
   now,
   timeZone,
   isTimelineExpanded,
@@ -499,6 +502,15 @@ export function InboxRowCard({
               <ChecksIcon state={state} />
               {checksLabel(status, state)}
             </span>
+            {stackOrdinal ? (
+              <span
+                className="pill-muted inline-flex h-6 items-center gap-1 rounded-full px-2 font-medium ring-1 ring-foreground/10"
+                title={`Stack position ${stackOrdinal.position} of ${stackOrdinal.total}`}
+              >
+                <Layers3 className="size-3" />
+                {stackOrdinal.position} of {stackOrdinal.total}
+              </span>
+            ) : null}
           </div>
         </div>
       </div>
