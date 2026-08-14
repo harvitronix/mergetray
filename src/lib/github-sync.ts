@@ -1,4 +1,4 @@
-import { getDatabase, id, integer, setSetting } from "./database.ts";
+import { getDatabase, id, integer, setSetting, setting } from "./database.ts";
 import { GithubClient } from "./github-client.ts";
 import {
   approvedReviewers,
@@ -32,6 +32,8 @@ const failureConclusions = new Set([
   "TIMED_OUT",
 ]);
 const hydrationConcurrency = 4;
+const githubIdentityRefreshIntervalMs = 60 * 60_000;
+const githubIdentityRefreshedAtSetting = "github_identity_refreshed_at";
 
 function errorMessage(error: unknown) {
   return (error instanceof Error ? error.message : "Unknown error").split(
@@ -116,7 +118,16 @@ export async function refreshGithubIdentity(client?: GithubClient) {
       ),
     ),
   );
+  setSetting(githubIdentityRefreshedAtSetting, String(Date.now()));
   return viewer;
+}
+
+function githubIdentityRefreshNeeded() {
+  const refreshedAt = setting(githubIdentityRefreshedAtSetting);
+  return (
+    !refreshedAt ||
+    Date.now() - Number(refreshedAt) >= githubIdentityRefreshIntervalMs
+  );
 }
 
 type CacheRow = {
@@ -668,7 +679,7 @@ export async function syncGithub(force = false) {
     ).run(Date.now());
     try {
       const client = await GithubClient.create();
-      await refreshGithubIdentity(client);
+      if (githubIdentityRefreshNeeded()) await refreshGithubIdentity(client);
       const repositories = db
         .prepare(
           "SELECT * FROM repositories WHERE selected = 1 AND removed_at IS NULL ORDER BY full_name",

@@ -109,7 +109,7 @@ afterEach(() => {
 });
 
 describe("GitHub polling", () => {
-  test("does not hydrate an unchanged PR again", async () => {
+  test("does not repeat unchanged PR or identity hydration", async () => {
     const now = vi.spyOn(Date, "now").mockReturnValue(1_000);
     await syncGithub(true);
     const revisionAfterFirstSync = githubDataRevision();
@@ -118,12 +118,16 @@ describe("GitHub polling", () => {
         url,
       ),
     ).length;
+    const identityRequestsAfterFirstSync = requests.filter(
+      (url) => url.endsWith("/user") || url.includes("/user/teams?"),
+    ).length;
 
     now.mockReturnValue(2_000);
     await syncGithub(true);
 
     expect(githubDataRevision()).toBe(revisionAfterFirstSync);
     expect(detailRequestsAfterFirstSync).toBe(3);
+    expect(identityRequestsAfterFirstSync).toBe(2);
     expect(
       requests.filter((url) =>
         /pulls\/7(?:\/requested_reviewers|\/reviews|\/commits|$)|issues\/7\/timeline/.test(
@@ -131,6 +135,11 @@ describe("GitHub polling", () => {
         ),
       ),
     ).toHaveLength(3);
+    expect(
+      requests.filter(
+        (url) => url.endsWith("/user") || url.includes("/user/teams?"),
+      ),
+    ).toHaveLength(2);
     expect(requests.filter((url) => url.endsWith("/graphql"))).toHaveLength(2);
   });
 
