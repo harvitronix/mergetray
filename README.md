@@ -38,7 +38,7 @@ git clone https://github.com/harvitronix/mergetray
 cd mergetray
 pnpm install
 pnpm mergetray setup
-pnpm mergetray open
+pnpm mergetray start
 ```
 
 Open [http://localhost:3002](http://localhost:3002) to use.
@@ -46,7 +46,7 @@ Open [http://localhost:3002](http://localhost:3002) to use.
 To use another port:
 
 ```bash
-pnpm mergetray open --port 4000
+pnpm mergetray start --port 4000
 ```
 
 To add or remove repositories non-interactively:
@@ -62,14 +62,14 @@ pnpm mergetray setup --remove-repos old-owner/old-repo
 pnpm mergetray doctor
 pnpm mergetray doctor --json
 pnpm mergetray setup [--add-repos owner/repo,...] [--remove-repos owner/repo,...] [--webhooks|--no-webhooks] [--no-login]
-pnpm mergetray open [--port 3002]
+pnpm mergetray start [--port 3002]
 pnpm mergetray webhooks [--port 3002]
 ```
 
 ## Security
 
 MergeTray is a single-user local application. The
-supported `pnpm mergetray open` command binds the web server to `127.0.0.1`,
+supported `pnpm mergetray start` command binds the web server to `127.0.0.1`,
 and there is no MergeTray account, cloud database, or application-level
 authentication. MergeTray does not implement its own telemetry; Next.js
 telemetry follows your local Next.js preference. Do not expose the server to a
