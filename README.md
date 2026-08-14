@@ -1,16 +1,19 @@
 # MergeTray
 
-MergeTray helps you track, build, and deploy PRs across repos, faster. 
+MergeTray helps you track, build, and deploy PRs across repos, faster,
+by treating your PRs like a proper inbox. 
 It's like a Mission Control for you and your teams' open PRs.
 
 ## Features
 
-- Makes keep tracking of dozens of PRs across dozens of repos enjoyable
-- Snooze, keep an eye on CI checks, see PR size and timeline, fast
+- Makes keeping tracking of dozens of PRs across dozens of repos enjoyable
+- Snooze, keep an eye on CI checks, see PR size and timeline at a glance
+- Mark PRs as Handled, don't see them again until they need attention
+- See what's ready for your attention, ignore, snooze or "Handle" what's not
 - Fully local - no cloud anything, just runs on your machine
 - No deep integrations - don't need a GitHub app or token, just use your CLI
 - Real-time updates - listens to webhooks (optional) and syncs every 5 minutes (dfault + fallback)
-- Small Codex (ChatGPT) integration - open session threads from MergeTray
+- Small Codex (ChatGPT) tie-in - open session threads from MergeTray locally
 
 ## Why not (some other tool)?
 
@@ -103,18 +106,18 @@ match a pull request. The integration is disabled by default. Enable it from
 Settings after installing the [Codex CLI](https://learn.chatgpt.com/docs/codex/cli)
 and signing in with `codex`.
 
-When enabled, the `codex` binary must be available on the server process's
+When enabled, the `codex` binary must be available on your local
 `PATH`. MergeTray uses the experimental
 [Codex app-server](https://learn.chatgpt.com/docs/app-server) protocol to read
 local active and archived task metadata. Task scans are loaded when the Codex
-section is opened and briefly cached; inbox renders do not start app-server.
+section is opened and briefly cached.
 Run `pnpm mergetray doctor` to check whether the CLI is available and whether
 the integration is enabled.
 
 ## Optional webhook refreshes
 
 GitHub webhooks can trigger targeted pulls - disabled by default.
-You can enable it through the setup.
+You can enable it through the interactive setup, or directly with:
 
 ```bash
 pnpm mergetray setup --webhooks
@@ -146,7 +149,7 @@ Run all checks with `pnpm check`.
 - Linear integration
 - Claude Code integration
 - Remote database support to use across devices
-- More direct control over PRs (though we're currently intentionally read only)
+- More direct control over PRs from within MergeTray, like enabling automerge (though we're currently intentionally read only)
 
 ## Contributing
 
