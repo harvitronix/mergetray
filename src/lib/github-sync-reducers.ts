@@ -1,9 +1,3 @@
-type GitHubTeam = {
-  id: number;
-  name: string;
-  slug: string;
-};
-
 export type GitHubPullRequest = {
   id: number;
   node_id: string;
@@ -22,11 +16,6 @@ export type GitHubPullRequest = {
   additions?: number;
   deletions?: number;
   changed_files?: number;
-};
-
-export type GitHubReviewRequests = {
-  users: Array<{ id: number; login: string }>;
-  teams: GitHubTeam[];
 };
 
 export type GitHubReview = {
@@ -152,23 +141,6 @@ function reviewLogin(review: GitHubReview) {
   return login && review.user?.type === "Bot" && !login.endsWith("[bot]")
     ? `${login}[bot]`
     : login;
-}
-
-export function requestedReviewers(
-  requests: GitHubReviewRequests,
-  orgLogin: string,
-) {
-  const users = requests.users.map((reviewer) => ({
-    githubUserId: String(reviewer.id),
-    githubLogin: reviewer.login,
-  }));
-  const teams = requests.teams.map((team) => ({
-    githubLogin: `${orgLogin}/${team.slug}`,
-    githubOrgLogin: orgLogin,
-    githubTeamSlug: team.slug,
-  }));
-
-  return [...users, ...teams];
 }
 
 export function timelineItems(

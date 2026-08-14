@@ -2,7 +2,6 @@ import { describe, expect, test } from "vitest";
 import {
   approvedReviewers,
   type GitHubPullRequest,
-  requestedReviewers,
   timelineItems,
 } from "./github-sync-reducers.ts";
 
@@ -60,25 +59,6 @@ describe("GitHub sync reducers", () => {
         },
       ]),
     ).toEqual([{ githubUserId: "20", githubLogin: "coderabbitai[bot]" }]);
-  });
-
-  test("requestedReviewers includes users and teams", () => {
-    expect(
-      requestedReviewers(
-        {
-          users: [{ id: 21, login: "fresh-user" }],
-          teams: [{ id: 22, name: "Frontend", slug: "frontend" }],
-        },
-        "CoastAI",
-      ),
-    ).toEqual([
-      { githubUserId: "21", githubLogin: "fresh-user" },
-      {
-        githubLogin: "CoastAI/frontend",
-        githubOrgLogin: "CoastAI",
-        githubTeamSlug: "frontend",
-      },
-    ]);
   });
 
   test("timelineItems compresses adjacent commits before the next review event", () => {
