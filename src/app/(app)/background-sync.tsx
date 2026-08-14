@@ -16,9 +16,11 @@ async function syncRevision() {
 export function BackgroundSync({
   enabled,
   githubRevision,
+  webhooksEnabled,
 }: {
   enabled: boolean;
   githubRevision: number;
+  webhooksEnabled: boolean;
 }) {
   const router = useRouter();
   const [refreshing, startTransition] = useTransition();
@@ -58,6 +60,7 @@ export function BackgroundSync({
   }, [enabled, refreshForRevision]);
 
   useEffect(() => {
+    if (!webhooksEnabled) return;
     let checking = false;
 
     async function refreshForWebhookUpdate() {
@@ -82,7 +85,7 @@ export function BackgroundSync({
       revisionCheckIntervalMs,
     );
     return () => window.clearInterval(interval);
-  }, [refreshForRevision]);
+  }, [refreshForRevision, webhooksEnabled]);
 
   useEffect(() => {
     let active = true;

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { type ReactNode, Suspense } from "react";
 import { Notice } from "@/components/app-ui";
+import { setting } from "@/lib/database";
 import {
   githubDataRevision,
   githubSyncNeeded,
@@ -77,6 +78,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       <BackgroundSync
         enabled={githubSyncNeeded()}
         githubRevision={githubDataRevision()}
+        webhooksEnabled={setting("github_webhooks_enabled") === "true"}
       />
     </main>
   );
