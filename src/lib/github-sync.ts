@@ -5,10 +5,8 @@ import {
   type GitHubCommit,
   type GitHubPullRequest,
   type GitHubReview,
-  type GitHubReviewRequests,
   type GitHubTimelineEvent,
   prState,
-  requestedReviewers,
   timelineItems,
   timestamp,
 } from "./github-sync-reducers.ts";
@@ -33,6 +31,7 @@ const failureConclusions = new Set([
   "STALE",
   "TIMED_OUT",
 ]);
+const hydrationConcurrency = 4;
 
 function errorMessage(error: unknown) {
   return (error instanceof Error ? error.message : "Unknown error").split(
@@ -262,28 +261,19 @@ async function hydratePullRequest(
   number: number,
 ) {
   const root = `/repos/${repository.owner.login}/${repository.name}`;
-  const [details, reviewRequests, reviews, commits, timeline] =
-    await Promise.all([
-      client.get<GitHubPullRequest>(`${root}/pulls/${number}`),
-      client.get<GitHubReviewRequests>(
-        `${root}/pulls/${number}/requested_reviewers`,
-      ),
-      cachedPages<GitHubReview>(
-        client,
-        `reviews:${repository.id}:${number}`,
-        `${root}/pulls/${number}/reviews`,
-      ),
-      cachedPages<GitHubCommit>(
-        client,
-        `commits:${repository.id}:${number}`,
-        `${root}/pulls/${number}/commits`,
-      ),
-      cachedPages<GitHubTimelineEvent>(
-        client,
-        `timeline:${repository.id}:${number}`,
-        `${root}/issues/${number}/timeline`,
-      ),
-    ]);
+  const [details, commits, timeline] = await Promise.all([
+    client.get<GitHubPullRequest>(`${root}/pulls/${number}`),
+    cachedPages<GitHubCommit>(
+      client,
+      `commits:${repository.id}:${number}`,
+      `${root}/pulls/${number}/commits`,
+    ),
+    cachedPages<GitHubTimelineEvent>(
+      client,
+      `timeline:${repository.id}:${number}`,
+      `${root}/issues/${number}/timeline`,
+    ),
+  ]);
   const live = details;
   const now = Date.now();
   const inboxItemId = transaction(() => {
@@ -341,16 +331,7 @@ async function hydratePullRequest(
       live.base.ref,
       timestamp(live.merged_at) ?? null,
     );
-    replaceParticipants(itemId, [
-      ...approvedReviewers(reviews).map((entry) => ({
-        ...entry,
-        relationship: "approved",
-      })),
-      ...requestedReviewers(reviewRequests, repository.owner.login).map(
-        (entry) => ({ ...entry, relationship: "review_requested" }),
-      ),
-    ]);
-    replaceTimeline(itemId, timelineItems(live, reviews, commits, timeline));
+    replaceTimeline(itemId, timelineItems(live, [], commits, timeline));
     return itemId;
   });
   reactivate(inboxItemId, Date.parse(live.updated_at));
@@ -577,15 +558,26 @@ async function syncRepository(client: GithubClient, row: SqlRow) {
     `open-pulls:${repository.id}`,
     `${root}/pulls?state=open&sort=created&direction=desc`,
   );
-  for (const pull of pulls) {
+  const changedPulls = pulls.filter((pull) => {
     const stored = storedItem(repositoryId, pull.number);
-    if (
+    return (
       !stored ||
       Number(stored.updated_at) !== Date.parse(pull.updated_at) ||
       stored.head_sha !== pull.head.sha
-    ) {
-      await hydratePullRequest(client, repository, repositoryId, pull.number);
-    }
+    );
+  });
+  for (
+    let offset = 0;
+    offset < changedPulls.length;
+    offset += hydrationConcurrency
+  ) {
+    await Promise.all(
+      changedPulls
+        .slice(offset, offset + hydrationConcurrency)
+        .map((pull) =>
+          hydratePullRequest(client, repository, repositoryId, pull.number),
+        ),
+    );
   }
 
   return pulls.length;

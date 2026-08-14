@@ -79,12 +79,6 @@ beforeEach(() => {
       if (url.endsWith("/repos/acme/widgets/pulls/7")) {
         return Response.json(pullRequest);
       }
-      if (url.endsWith("/repos/acme/widgets/pulls/7/requested_reviewers")) {
-        return Response.json({ users: [], teams: [] });
-      }
-      if (url.includes("/repos/acme/widgets/pulls/7/reviews?")) {
-        return Response.json([], { headers: { etag: '"reviews"' } });
-      }
       if (url.includes("/repos/acme/widgets/pulls/7/commits?")) {
         return Response.json([], { headers: { etag: '"commits"' } });
       }
@@ -123,14 +117,14 @@ describe("GitHub polling", () => {
 
     await syncGithub(true);
 
-    expect(detailRequestsAfterFirstSync).toBe(5);
+    expect(detailRequestsAfterFirstSync).toBe(3);
     expect(
       requests.filter((url) =>
         /pulls\/7(?:\/requested_reviewers|\/reviews|\/commits|$)|issues\/7\/timeline/.test(
           url,
         ),
       ),
-    ).toHaveLength(5);
+    ).toHaveLength(3);
     expect(requests.filter((url) => url.endsWith("/graphql"))).toHaveLength(2);
   });
 
@@ -151,7 +145,7 @@ describe("GitHub polling", () => {
           url,
         ),
       ),
-    ).toHaveLength(5);
+    ).toHaveLength(3);
     expect(requests.filter((url) => url.endsWith("/graphql"))).toHaveLength(1);
     expect(
       githubWebhookTargets("status", {
