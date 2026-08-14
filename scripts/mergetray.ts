@@ -381,7 +381,7 @@ async function setup() {
     console.log(`  Found: ${found.join(", ") || "none"}`);
     console.log(`  Not found: ${notFound.join(", ") || "none"}`);
   }
-  console.log("\nRun pnpm mergetray open, then visit http://localhost:3002.");
+  console.log("\nRun pnpm mergetray start, then visit http://localhost:3002.");
 }
 
 function appPort() {
@@ -453,7 +453,7 @@ function stopForwarders(forwarders: Forwarder[]) {
   }
 }
 
-async function openApp() {
+async function startApp() {
   const port = appPort();
 
   console.log(`→ Launching MergeTray at http://localhost:${port}`);
@@ -509,7 +509,7 @@ function help() {
 Actions:
   doctor                     Check Node, gh authentication, SQLite, and setup
   setup                      Configure repositories, webhooks, and sync
-  open [--port 3002]         Start MergeTray on localhost
+  start [--port 3002]        Start MergeTray on localhost
   webhooks [--port 3002]     Run configured webhook forwarding on its own
 
 Options:
@@ -526,7 +526,7 @@ const action = process.argv[2];
 try {
   if (action === "doctor") await doctor();
   else if (action === "setup") await setup();
-  else if (action === "open") await openApp();
+  else if (action === "start") await startApp();
   else if (action === "webhooks") await runWebhooks();
   else {
     help();
