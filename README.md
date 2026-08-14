@@ -3,6 +3,8 @@
 MergeTray is a dashboard for your PRs. Know what needs your attention
 quickly, across all PRs across all your repos, so you can deploy faster.
 
+![MergeTray inbox with grouped pull requests](docs/mergetray-inbox.png)
+
 ## Features
 
 - Makes tracking many PRs across multiple repos enjoyable (or at least tractable)
