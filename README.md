@@ -13,6 +13,7 @@ quickly, across all your repositories, so you can deploy faster.
 - No deep integrations - uses your existing CLIs
 - Real-time updates - listens to webhooks (optional) and syncs every 5 minutes (default + fallback)
 - Small Codex (ChatGPT) tie-in - open session threads from MergeTray locally
+- Add post-it notes to each PR to remind yourself what's needed next
 
 ## Why not (some other tool)?
 
