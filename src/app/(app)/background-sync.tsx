@@ -23,7 +23,7 @@ export function BackgroundSync({
   webhooksEnabled: boolean;
 }) {
   const router = useRouter();
-  const [refreshing, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
   const [syncing, setSyncing] = useState(enabled);
   const revision = useRef(githubRevision);
 
@@ -91,11 +91,15 @@ export function BackgroundSync({
     let active = true;
 
     const interval = window.setInterval(() => {
+      setSyncing(true);
       void syncRevision()
         .catch(() => undefined)
         .then((result) => {
           if (active && result)
             refreshForRevision(result.revision, result.failed);
+        })
+        .finally(() => {
+          if (active) setSyncing(false);
         });
     }, githubSyncIntervalMs);
 
@@ -105,7 +109,7 @@ export function BackgroundSync({
     };
   }, [refreshForRevision]);
 
-  if (!syncing && !refreshing) return null;
+  if (!syncing) return null;
 
   return (
     <div
