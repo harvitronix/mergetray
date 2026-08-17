@@ -45,11 +45,14 @@ type SelectedRepository = { full_name: string; owner: string };
 type Forwarder = {
   child?: ChildProcess;
   label: string;
+  restartDelayMs: number;
   restartTimer?: NodeJS.Timeout;
   stopping: boolean;
 };
 
 const webhookRestartDelayMs = 5_000;
+const webhookMaxRestartDelayMs = 5 * 60_000;
+const webhookStableRunMs = 60_000;
 
 function option(name: string) {
   const prefix = `--${name}=`;
@@ -419,9 +422,14 @@ function webhookForwarderSpecs(port: number) {
 
 function startWebhookForwarders(port: number) {
   return webhookForwarderSpecs(port).map(({ label, args }) => {
-    const forwarder: Forwarder = { label, stopping: false };
+    const forwarder: Forwarder = {
+      label,
+      restartDelayMs: webhookRestartDelayMs,
+      stopping: false,
+    };
 
     function start() {
+      const startedAt = Date.now();
       const child = spawn("gh", args, { stdio: "inherit" });
       forwarder.child = child;
       child.once("error", (error) => {
@@ -433,10 +441,18 @@ function startWebhookForwarders(port: number) {
       });
       child.once("close", (code) => {
         if (forwarder.stopping) return;
+        if (Date.now() - startedAt >= webhookStableRunMs) {
+          forwarder.restartDelayMs = webhookRestartDelayMs;
+        }
+        const restartDelayMs = forwarder.restartDelayMs;
         console.warn(
-          `Webhook forwarding stopped for ${label}${code ? ` (${code})` : ""}; restarting in 5 seconds`,
+          `Webhook forwarding stopped for ${label}${code ? ` (${code})` : ""}; restarting in ${restartDelayMs / 1_000} seconds`,
         );
-        forwarder.restartTimer = setTimeout(start, webhookRestartDelayMs);
+        forwarder.restartTimer = setTimeout(start, restartDelayMs);
+        forwarder.restartDelayMs = Math.min(
+          restartDelayMs * 2,
+          webhookMaxRestartDelayMs,
+        );
       });
     }
 
