@@ -121,9 +121,9 @@ type InboxRowCardProps = {
 };
 
 function checkState(value: string | undefined): CheckState {
-  if (value === "passing" || value === "failing" || value === "pending") {
-    return value;
-  }
+  if (value === "success") return "passing";
+  if (value === "failure") return "failing";
+  if (value === "pending") return "pending";
   return "unknown";
 }
 
@@ -150,7 +150,7 @@ function checksLabel(
   if (!status || state === "unknown") return "No checks";
   if (state === "failing") return `${status.failingCount} failing`;
   if (state === "pending") return `${status.pendingCount} pending`;
-  return `${status.passingCount} passing`;
+  return "Passed";
 }
 
 function ChecksIcon({ state }: { state: CheckState }) {
