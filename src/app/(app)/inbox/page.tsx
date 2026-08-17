@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { AppPage } from "@/components/app-ui";
 import { attachAgentSessionLinks } from "@/lib/agent-sessions";
 import { codexIntegrationEnabled } from "@/lib/codex-integration";
+import { githubSyncState } from "@/lib/github-sync";
 import { inboxLayout, inboxLayoutCookieName } from "@/lib/inbox-layout";
 import {
   githubIdentityConfigured,
@@ -32,6 +33,7 @@ export default async function InboxPage({
   const selectedAuthor = query.author?.replace(/^github:/, "") || undefined;
   const repositoryId = query.repo || undefined;
   const codexEnabled = codexIntegrationEnabled();
+  const syncError = githubSyncState()?.error;
   const rows = repositoryId ? listInboxRows(repositoryId) : listInboxRows();
   const inbox = codexEnabled ? attachAgentSessionLinks(rows) : rows;
   const repositories = listRepositories();
@@ -118,6 +120,7 @@ export default async function InboxPage({
         }
         localGithubIdentityConfigured={githubIdentityConfigured()}
         codexEnabled={codexEnabled}
+        syncError={syncError}
         updateStatus={updateStatus}
         snoozeItem={snoozeItem}
         promoteToShipIt={promoteToShipIt}

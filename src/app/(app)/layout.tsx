@@ -1,15 +1,9 @@
 import { cookies } from "next/headers";
 import Image from "next/image";
-import Link from "next/link";
 import { connection } from "next/server";
 import { type ReactNode, Suspense } from "react";
-import { Notice } from "@/components/app-ui";
 import { setting } from "@/lib/database";
-import {
-  githubDataRevision,
-  githubSyncNeeded,
-  githubSyncState,
-} from "@/lib/github-sync";
+import { githubDataRevision, githubSyncNeeded } from "@/lib/github-sync";
 import {
   inboxCounts,
   listInboxRows,
@@ -25,7 +19,6 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const rows = listInboxRows();
   const counts = inboxCounts(rows);
   const repositories = listRepositories();
-  const syncState = githubSyncState();
 
   return (
     <main
@@ -60,20 +53,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
             <AppNav counts={counts} repositories={repositories} />
           </Suspense>
         </aside>
-        <section className="min-w-0 bg-[var(--app-bg)]">
-          {syncState?.error ? (
-            <div className="mx-auto w-full max-w-7xl px-4 pt-4 sm:px-5 lg:px-8">
-              <Notice tone="danger">
-                <strong>GitHub sync failed.</strong> {syncState.error} Timeline
-                data may be stale.{" "}
-                <Link className="font-semibold underline" href="/settings">
-                  Review connection
-                </Link>
-              </Notice>
-            </div>
-          ) : null}
-          {children}
-        </section>
+        <section className="min-w-0 bg-[var(--app-bg)]">{children}</section>
       </div>
       <BackgroundSync
         enabled={githubSyncNeeded()}
