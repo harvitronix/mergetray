@@ -9,6 +9,7 @@ import {
   RefreshCw,
   UserRound,
 } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useSyncExternalStore } from "react";
 import { Notice, Surface } from "@/components/app-ui";
@@ -58,6 +59,7 @@ export function InboxTable({
   selectedRepository,
   localGithubIdentityConfigured,
   codexEnabled,
+  syncError,
   updateStatus,
   snoozeItem,
   promoteToShipIt,
@@ -71,6 +73,7 @@ export function InboxTable({
   selectedRepository?: { fullName: string };
   localGithubIdentityConfigured: boolean;
   codexEnabled: boolean;
+  syncError?: string;
   updateStatus: (formData: FormData) => void | Promise<void>;
   snoozeItem: (formData: FormData) => void | Promise<void>;
   promoteToShipIt: (formData: FormData) => void | Promise<void>;
@@ -379,6 +382,15 @@ export function InboxTable({
           </Notice>
         ) : null}
       </Surface>
+      {syncError ? (
+        <Notice tone="danger" className="mt-4">
+          <strong>GitHub sync failed.</strong> {syncError} Timeline data may be
+          stale.{" "}
+          <Link className="font-semibold underline" href="/settings">
+            Review connection
+          </Link>
+        </Notice>
+      ) : null}
       {selectedRows.length ? (
         <InboxBulkActions
           selectedCount={selectedRows.length}
