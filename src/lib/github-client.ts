@@ -37,6 +37,21 @@ export class GithubClient {
     return response.data;
   }
 
+  async delete(path: string) {
+    const response = await fetch(`https://api.github.com${path}`, {
+      method: "DELETE",
+      headers: {
+        accept: "application/vnd.github+json",
+        authorization: `Bearer ${this.token}`,
+        "x-github-api-version": "2022-11-28",
+      },
+    });
+    if (!response.ok) {
+      const message = await response.text();
+      throw new GithubApiError(response.status, message.slice(0, 240));
+    }
+  }
+
   async rest<T>(path: string, etag?: string): Promise<RestResult<T>> {
     const response = await fetch(`https://api.github.com${path}`, {
       headers: {

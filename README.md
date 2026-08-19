@@ -66,6 +66,10 @@ pnpm mergetray start [--port 3002]
 pnpm mergetray webhooks [--port 3002]
 ```
 
+If webhook forwarding is already registered, MergeTray asks before replacing
+it. Use `--take-over-webhooks` to confirm the replacement during unattended
+startup. Declining leaves five-minute polling active.
+
 ## Security
 
 MergeTray is a single-user local application. The

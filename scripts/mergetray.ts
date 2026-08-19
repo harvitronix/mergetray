@@ -27,6 +27,10 @@ import {
   removeGithubRepositories,
   syncGithub,
 } from "../src/lib/github-sync.ts";
+import {
+  type GithubWebhook,
+  githubCliForwardingHookIds,
+} from "../src/lib/github-webhook-forwarding.ts";
 
 const githubWebhooksEnabledSetting = "github_webhooks_enabled";
 const githubWebhookTargetSetting = "github_webhook_target";
@@ -42,6 +46,11 @@ const githubWebhookEvents = [
 ].join(",");
 
 type SelectedRepository = { full_name: string; owner: string };
+type WebhookTarget = {
+  args: string[];
+  hooksPath: string;
+  label: string;
+};
 type Forwarder = {
   child?: ChildProcess;
   label: string;
@@ -396,28 +405,90 @@ function appPort() {
   return port;
 }
 
-function webhookForwarderSpecs(port: number) {
+function webhookTargets(): WebhookTarget[] {
   if (setting(githubWebhooksEnabledSetting) !== "true") return [];
-  const commonArgs = [
-    "webhook",
-    "forward",
-    `--events=${githubWebhookEvents}`,
-    `--url=http://127.0.0.1:${port}/api/github/webhook`,
-  ];
   const target = setting(githubWebhookTargetSetting);
   if (target?.startsWith("org:")) {
     const organization = target.slice(4);
     return [
       {
         label: `${organization} organization`,
-        args: [...commonArgs, `--org=${organization}`],
+        args: [`--org=${organization}`],
+        hooksPath: `/orgs/${organization}/hooks`,
       },
     ];
   }
   return selectedRepositories().map((repository) => ({
     label: repository.full_name,
-    args: [...commonArgs, `--repo=${repository.full_name}`],
+    args: [`--repo=${repository.full_name}`],
+    hooksPath: `/repos/${repository.full_name}/hooks`,
   }));
+}
+
+function webhookForwarderSpecs(port: number) {
+  const commonArgs = [
+    "webhook",
+    "forward",
+    `--events=${githubWebhookEvents}`,
+    `--url=http://127.0.0.1:${port}/api/github/webhook`,
+  ];
+  return webhookTargets().map((target) => ({
+    ...target,
+    args: [...commonArgs, ...target.args],
+  }));
+}
+
+async function prepareWebhookForwarding() {
+  const targets = webhookTargets();
+  if (!targets.length) return false;
+
+  const client = await GithubClient.create();
+  const conflicts = (
+    await Promise.all(
+      targets.map(async (target) => ({
+        target,
+        hookIds: githubCliForwardingHookIds(
+          await client.get<GithubWebhook[]>(`${target.hooksPath}?per_page=100`),
+        ),
+      })),
+    )
+  ).filter(({ hookIds }) => hookIds.length);
+  if (!conflicts.length) return true;
+
+  console.warn("Webhook forwarding is already registered for:");
+  for (const { target } of conflicts) console.warn(`  - ${target.label}`);
+
+  let takeOver = process.argv.includes("--take-over-webhooks");
+  if (!takeOver && process.stdin.isTTY) {
+    const prompt = createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
+    const answer = (
+      await prompt.question(
+        "Take over on this machine? Existing forwarding will stop; Mergetray polling remains active. (y/N): ",
+      )
+    )
+      .trim()
+      .toLowerCase();
+    prompt.close();
+    takeOver = answer === "y" || answer === "yes";
+  }
+
+  if (!takeOver) {
+    console.warn(
+      "• Webhook forwarding not started; five-minute polling remains active",
+    );
+    return false;
+  }
+
+  for (const { target, hookIds } of conflicts) {
+    for (const hookId of hookIds) {
+      await client.delete(`${target.hooksPath}/${hookId}`);
+    }
+  }
+  console.log("✓ Existing webhook forwarding released");
+  return true;
 }
 
 function startWebhookForwarders(port: number) {
@@ -471,6 +542,7 @@ function stopForwarders(forwarders: Forwarder[]) {
 
 async function startApp() {
   const port = appPort();
+  const forwardWebhooks = await prepareWebhookForwarding();
 
   console.log(`→ Launching MergeTray at http://localhost:${port}`);
   const app = spawn(
@@ -478,7 +550,7 @@ async function startApp() {
     ["exec", "next", "dev", "--hostname", "127.0.0.1", "--port", String(port)],
     { stdio: "inherit" },
   );
-  const forwarders = startWebhookForwarders(port);
+  const forwarders = forwardWebhooks ? startWebhookForwarders(port) : [];
   if (forwarders.length) {
     console.log(
       `→ Starting webhook forwarding for ${forwarders.map(({ label }) => label).join(", ")}`,
@@ -502,10 +574,11 @@ async function startApp() {
 
 async function runWebhooks() {
   const port = appPort();
-  const forwarders = startWebhookForwarders(port);
-  if (!forwarders.length) {
+  if (!webhookTargets().length) {
     throw new Error("Webhook updates are disabled. Run pnpm mergetray setup.");
   }
+  if (!(await prepareWebhookForwarding())) return;
+  const forwarders = startWebhookForwarders(port);
   console.log(
     `→ Forwarding webhooks to http://127.0.0.1:${port}/api/github/webhook`,
   );
@@ -533,6 +606,7 @@ Options:
   --remove-repos a/b,c/d     Remove repositories without an interactive prompt
   --webhooks                 Enable webhooks during non-interactive setup
   --no-webhooks              Disable webhooks during setup
+  --take-over-webhooks       Replace existing GitHub CLI webhook forwarding
   --no-login                 Do not launch gh auth login
   --port 3002                Override the app port
   --json                     Print doctor results as JSON`);
