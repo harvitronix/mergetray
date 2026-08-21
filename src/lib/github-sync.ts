@@ -356,6 +356,7 @@ type VolatilePullRequest = {
   closedAt?: string | null;
   mergedAt?: string | null;
   headRefOid: string;
+  autoMergeRequest?: { enabledAt: string } | null;
   reviewRequests: {
     nodes: Array<{
       requestedReviewer?:
@@ -390,7 +391,7 @@ async function refreshVolatilePullRequests(
   const open = db
     .prepare(
       `SELECT i.id, i.github_node_id, i.repository_id, i.updated_at,
-              d.head_sha, r.owner, r.name
+              d.head_sha, d.auto_merge_enabled, r.owner, r.name
        FROM inbox_items i
        JOIN pull_request_details d ON d.inbox_item_id = i.id
        JOIN repositories r ON r.id = i.repository_id
@@ -410,6 +411,7 @@ async function refreshVolatilePullRequests(
         (_, index) => `p${index}: node(id: $id${index}) {
           ... on PullRequest {
             id state updatedAt closedAt mergedAt headRefOid
+            autoMergeRequest { enabledAt }
             reviewRequests(first: 100) {
               nodes { requestedReviewer {
                 ... on User { login databaseId }
@@ -511,6 +513,9 @@ async function refreshVolatilePullRequests(
         .get(inboxItemId) as SqlRow | undefined;
       const rollupState =
         live.statusCheckRollup?.state.toLowerCase() ?? "unknown";
+      const autoMergeEnabled = Boolean(live.autoMergeRequest);
+      const autoMergeChanged =
+        Boolean(stored.auto_merge_enabled) !== autoMergeEnabled;
       const statusChanged =
         !previous ||
         String(previous.rollup_state) !== rollupState ||
@@ -539,7 +544,11 @@ async function refreshVolatilePullRequests(
         );
       }
       const updatedAt = Date.parse(live.updatedAt);
-      if (updatedAt > Number(stored.updated_at) || statusChanged) {
+      if (
+        updatedAt > Number(stored.updated_at) ||
+        statusChanged ||
+        autoMergeChanged
+      ) {
         db.prepare(
           `UPDATE inbox_items
            SET state = ?, updated_at = ?, closed_at = ?, last_synced_at = ?
@@ -552,8 +561,14 @@ async function refreshVolatilePullRequests(
           inboxItemId,
         );
         db.prepare(
-          "UPDATE pull_request_details SET merged_at = ? WHERE inbox_item_id = ?",
-        ).run(timestamp(live.mergedAt) ?? null, inboxItemId);
+          `UPDATE pull_request_details
+           SET merged_at = ?, auto_merge_enabled = ?
+           WHERE inbox_item_id = ?`,
+        ).run(
+          timestamp(live.mergedAt) ?? null,
+          Number(autoMergeEnabled),
+          inboxItemId,
+        );
         reactivate(inboxItemId, Date.now());
       }
     });

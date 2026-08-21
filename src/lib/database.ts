@@ -49,7 +49,8 @@ const schema = `
     head_sha TEXT NOT NULL,
     head_ref TEXT NOT NULL,
     base_ref TEXT NOT NULL,
-    merged_at INTEGER
+    merged_at INTEGER,
+    auto_merge_enabled INTEGER NOT NULL DEFAULT 0
   );
   CREATE TABLE IF NOT EXISTS pull_request_statuses (
     id INTEGER PRIMARY KEY,
@@ -146,6 +147,14 @@ export function getDatabase() {
   database = new DatabaseSync(nextPath, { timeout: 5_000 });
   databasePath = nextPath;
   database.exec(schema);
+  const detailColumns = database
+    .prepare("PRAGMA table_info(pull_request_details)")
+    .all() as Array<{ name: string }>;
+  if (!detailColumns.some((column) => column.name === "auto_merge_enabled")) {
+    database.exec(
+      "ALTER TABLE pull_request_details ADD COLUMN auto_merge_enabled INTEGER NOT NULL DEFAULT 0",
+    );
+  }
   return database;
 }
 

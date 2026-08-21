@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { closeDatabase } from "./database.ts";
+import { closeDatabase, getDatabase } from "./database.ts";
 import {
   githubDataRevision,
   syncGithub,
@@ -58,6 +58,7 @@ beforeEach(() => {
               closedAt: null,
               mergedAt: null,
               headRefOid: pullRequest.head.sha,
+              autoMergeRequest: { enabledAt: updatedAt },
               reviewRequests: { nodes: [] },
               reviews: { nodes: [] },
               statusCheckRollup: { state: "SUCCESS", contexts: { nodes: [] } },
@@ -113,6 +114,11 @@ describe("GitHub polling", () => {
     const now = vi.spyOn(Date, "now").mockReturnValue(1_000);
     await syncGithub(true);
     const revisionAfterFirstSync = githubDataRevision();
+    expect(
+      getDatabase()
+        .prepare("SELECT auto_merge_enabled FROM pull_request_details LIMIT 1")
+        .get(),
+    ).toEqual({ auto_merge_enabled: 1 });
     const detailRequestsAfterFirstSync = requests.filter((url) =>
       /pulls\/7(?:\/requested_reviewers|\/reviews|\/commits|$)|issues\/7\/timeline/.test(
         url,

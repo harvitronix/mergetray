@@ -444,6 +444,12 @@ export function InboxRowCard({
                 {sectionLabels[sectionId]}
               </span>
             ) : null}
+            {pullRequestDetails.autoMergeEnabled ? (
+              <span className="inline-flex h-6 items-center gap-1 rounded-md bg-fuchsia-600 px-2.5 text-xs font-bold uppercase tracking-wide text-white shadow-sm">
+                <Rocket className="size-3" />
+                Auto-merge on
+              </span>
+            ) : null}
             {hideReviewBadge ? null : (
               <span
                 className={`inline-flex h-6 items-center gap-1 rounded-md px-2.5 text-xs font-semibold ring-1 ${review.style}`}

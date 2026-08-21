@@ -14,6 +14,7 @@ const pullRequestDetails: NonNullable<InboxSectionRow["pullRequestDetails"]> = {
   headSha: "abc",
   headRef: "feature",
   baseRef: "main",
+  autoMergeEnabled: false,
 };
 
 const baseRow: InboxSectionRow = {
