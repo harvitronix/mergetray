@@ -36,6 +36,7 @@ export type PullRequestDetails = {
   headRef: string;
   baseRef: string;
   mergedAt?: number;
+  autoMergeEnabled: boolean;
 };
 
 export type PullRequestStatus = {

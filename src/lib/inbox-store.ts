@@ -65,6 +65,7 @@ function details(row: SqlRow): PullRequestDetails {
     headRef: String(row.head_ref),
     baseRef: String(row.base_ref),
     mergedAt: optionalNumber(row.merged_at),
+    autoMergeEnabled: Boolean(row.auto_merge_enabled),
   };
 }
 

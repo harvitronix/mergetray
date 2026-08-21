@@ -458,6 +458,12 @@ export function InboxRowCard({
                 {actionReason}
               </span>
             ) : null}
+            {pullRequestDetails.autoMergeEnabled ? (
+              <span className="inline-flex h-6 items-center gap-1 rounded-md bg-fuchsia-600 px-2.5 text-xs font-bold uppercase tracking-wide text-white shadow-sm ring-2 ring-fuchsia-300/70">
+                <Rocket className="size-3" />
+                Auto-merge on
+              </span>
+            ) : null}
           </div>
           <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-foreground/55">
             <span className="inline-flex items-center gap-1 font-mono">
