@@ -444,6 +444,12 @@ export function InboxRowCard({
                 {sectionLabels[sectionId]}
               </span>
             ) : null}
+            {pullRequestDetails.autoMergeEnabled ? (
+              <span className="inline-flex h-6 items-center gap-1 rounded-md bg-fuchsia-600 px-2.5 text-xs font-bold uppercase tracking-wide text-white shadow-sm">
+                <Rocket className="size-3" />
+                Auto-merge on
+              </span>
+            ) : null}
             {hideReviewBadge ? null : (
               <span
                 className={`inline-flex h-6 items-center gap-1 rounded-md px-2.5 text-xs font-semibold ring-1 ${review.style}`}
@@ -456,12 +462,6 @@ export function InboxRowCard({
               <span className="pill-warning inline-flex h-6 items-center gap-1 rounded-md px-2.5 text-xs font-semibold text-[var(--warning-text)] ring-1 ring-amber-500/20">
                 <span className="size-1.5 rounded-full bg-amber-500" />
                 {actionReason}
-              </span>
-            ) : null}
-            {pullRequestDetails.autoMergeEnabled ? (
-              <span className="inline-flex h-6 items-center gap-1 rounded-md bg-fuchsia-600 px-2.5 text-xs font-bold uppercase tracking-wide text-white shadow-sm ring-2 ring-fuchsia-300/70">
-                <Rocket className="size-3" />
-                Auto-merge on
               </span>
             ) : null}
           </div>
