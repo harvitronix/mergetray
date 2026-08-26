@@ -10,7 +10,7 @@ import {
   codexIntegrationEnabled,
 } from "@/lib/codex-integration";
 import { codexSessionId } from "@/lib/codex-links";
-import { codexRecoveryOption } from "@/lib/codex-worktrees";
+import { codexNewTask, codexRecoveryOption } from "@/lib/codex-worktrees";
 import { CodexChat, type CodexInitialThread } from "./codex-chat";
 
 function threadSummary(thread: CodexThread) {
@@ -23,7 +23,7 @@ function threadSummary(thread: CodexThread) {
 export default async function CodexPage({
   searchParams,
 }: {
-  searchParams: Promise<{ thread?: string }>;
+  searchParams: Promise<{ newFor?: string; thread?: string }>;
 }) {
   if (!codexIntegrationEnabled()) {
     return (
@@ -36,13 +36,15 @@ export default async function CodexPage({
   }
 
   const version = await codexCliVersion();
-  const threadParam = (await searchParams).thread;
+  const params = await searchParams;
+  const threadParam = params.thread;
   const requestedThreadId = codexSessionId(threadParam ?? "");
   const defaultCheckout = await inspectCodexCheckout({
     cwd: process.cwd(),
     gitInfo: null,
   });
   let initialError: string | undefined;
+  let initialNewTask: Awaited<ReturnType<typeof codexNewTask>>;
   let initialThread: CodexInitialThread | undefined;
   let initialThreads: Array<{ id: string; title: string }> = [];
 
@@ -87,6 +89,11 @@ export default async function CodexPage({
         initialError =
           error instanceof Error ? error.message : "Codex task load failed.";
       }
+    } else if (params.newFor) {
+      initialNewTask = await codexNewTask(params.newFor);
+      if (!initialNewTask) {
+        initialError = "That pull request is no longer available.";
+      }
     }
   }
 
@@ -96,6 +103,7 @@ export default async function CodexPage({
         <CodexChat
           defaultCheckout={defaultCheckout}
           initialError={initialError}
+          initialNewTask={initialNewTask}
           initialThread={initialThread}
           initialThreads={initialThreads}
           version={version}

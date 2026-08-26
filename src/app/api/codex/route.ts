@@ -6,7 +6,11 @@ import {
 } from "@/lib/codex-app-server";
 import { inspectCodexCheckout } from "@/lib/codex-checkout";
 import { codexIntegrationEnabled } from "@/lib/codex-integration";
-import { codexRecoveryOption, recoverCodexThread } from "@/lib/codex-worktrees";
+import {
+  codexRecoveryOption,
+  createCodexThreadForInboxItem,
+  recoverCodexThread,
+} from "@/lib/codex-worktrees";
 import { isLocalRequest } from "@/lib/local-request";
 
 export const dynamic = "force-dynamic";
@@ -100,6 +104,7 @@ export async function POST(request: Request) {
     | {
         action?: "turn" | "approval" | "interrupt" | "recover";
         prompt?: string;
+        inboxItemId?: string;
         threadId?: string;
         turnId?: string;
         requestId?: string | number;
@@ -300,15 +305,19 @@ export async function POST(request: Request) {
                 "thread/resume",
                 { threadId: activeThreadId },
               )
-            : await codexAppServer.request<{ thread: CodexThread }>(
-                "thread/start",
-                {
-                  cwd,
-                  approvalPolicy: "on-request",
-                  sandbox: "read-only",
-                  serviceName: "mergetray",
-                },
-              );
+            : body.inboxItemId
+              ? await createCodexThreadForInboxItem(body.inboxItemId, (stage) =>
+                  eventData(controller, { type: "setup", stage }),
+                )
+              : await codexAppServer.request<{ thread: CodexThread }>(
+                  "thread/start",
+                  {
+                    cwd,
+                    approvalPolicy: "on-request",
+                    sandbox: "read-only",
+                    serviceName: "mergetray",
+                  },
+                );
           activeThreadId = result.thread.id;
           const checkout = await inspectCodexCheckout(result.thread);
           eventData(controller, {
@@ -324,6 +333,9 @@ export async function POST(request: Request) {
             throw new Error(checkout.reason ?? "This checkout is unavailable.");
           }
 
+          if (body.inboxItemId) {
+            eventData(controller, { type: "setup", stage: "startingTurn" });
+          }
           const turn = await codexAppServer.request<{ turn: { id: string } }>(
             "turn/start",
             {

@@ -4,7 +4,7 @@ import {
   codexSessionMatches,
   codexSessionUrl,
   githubRepository,
-  newCodexSessionUrl,
+  newCodexTaskUrl,
   singleActiveCodexSession,
 } from "./codex-links.ts";
 
@@ -21,26 +21,8 @@ describe("Codex links", () => {
     expect(codexSessionUrl(sessionId)).toBe(`/codex?thread=${sessionId}`);
   });
 
-  test("builds a new task link with repository and PR context", () => {
-    const link = new URL(
-      newCodexSessionUrl({
-        repository: "acme/widgets",
-        number: 123,
-        title: "Finish the thing",
-        url: "https://github.com/acme/widgets/pull/123",
-        branch: "feature/finish-the-thing",
-      }),
-    );
-
-    expect(link.protocol).toBe("codex:");
-    expect(link.hostname).toBe("threads");
-    expect(link.pathname).toBe("/new");
-    expect(link.searchParams.get("originUrl")).toBe(
-      "git@github.com:acme/widgets.git",
-    );
-    expect(link.searchParams.get("prompt")).toContain(
-      "Branch: feature/finish-the-thing",
-    );
+  test("opens a PR task draft inside MergeTray", () => {
+    expect(newCodexTaskUrl("123")).toBe("/codex?newFor=123");
   });
 
   test("matches candidates by exact GitHub repository and branch", () => {

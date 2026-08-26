@@ -13,6 +13,8 @@ type RecoveryContext = {
   full_name: string;
   local_path: string | null;
   number: number;
+  title: string;
+  url: string;
   head_sha: string;
   head_ref: string;
 };
@@ -26,6 +28,24 @@ export type CodexRecoveryOption = {
   available: boolean;
   reason?: string;
 };
+
+export type CodexNewTask = {
+  inboxItemId: string;
+  repository: string;
+  number: number;
+  title: string;
+  url: string;
+  branch: string;
+  sha: string;
+  available: boolean;
+  reason?: string;
+};
+
+export type CodexTaskSetupStage =
+  | "preparingCheckout"
+  | "creatingWorktree"
+  | "startingTask"
+  | "linkingTask";
 
 async function git(cwd: string, ...args: string[]) {
   const { stdout } = await execFileAsync("git", ["-C", cwd, ...args], {
@@ -49,7 +69,8 @@ function recoveryContext(threadId: string) {
   return getDatabase()
     .prepare(
       `SELECT inbox_items.id AS inbox_item_id, repositories.full_name,
-              repositories.local_path, inbox_items.number,
+              repositories.local_path, inbox_items.number, inbox_items.title,
+              inbox_items.url,
               pull_request_details.head_sha, pull_request_details.head_ref
        FROM agent_session_links
        JOIN inbox_items ON inbox_items.id = agent_session_links.inbox_item_id
@@ -60,6 +81,21 @@ function recoveryContext(threadId: string) {
          AND inbox_items.state = 'open'`,
     )
     .get(threadId) as RecoveryContext | undefined;
+}
+
+function pullRequestContext(inboxItemId: string) {
+  return getDatabase()
+    .prepare(
+      `SELECT inbox_items.id AS inbox_item_id, repositories.full_name,
+              repositories.local_path, inbox_items.number, inbox_items.title,
+              inbox_items.url, pull_request_details.head_sha,
+              pull_request_details.head_ref
+       FROM inbox_items
+       JOIN repositories ON repositories.id = inbox_items.repository_id
+       JOIN pull_request_details ON pull_request_details.inbox_item_id = inbox_items.id
+       WHERE inbox_items.id = ? AND inbox_items.state = 'open'`,
+    )
+    .get(inboxItemId) as RecoveryContext | undefined;
 }
 
 async function recoveryRepository(
@@ -119,6 +155,38 @@ export async function codexRecoveryOption(
   };
 }
 
+export async function codexNewTask(
+  inboxItemId: string,
+): Promise<CodexNewTask | undefined> {
+  const context = pullRequestContext(inboxItemId);
+  if (!context) return;
+
+  let reason: string | undefined;
+  if (!/^[0-9a-f]{40}$/i.test(context.head_sha)) {
+    reason = "The pull request head commit is invalid.";
+  } else if (!context.local_path) {
+    reason = `Set a local checkout for ${context.full_name} in Settings first.`;
+  } else {
+    try {
+      await localRepository(context.local_path, context.full_name);
+    } catch {
+      reason = `Set an available local checkout for ${context.full_name} in Settings first.`;
+    }
+  }
+
+  return {
+    inboxItemId,
+    repository: context.full_name,
+    number: context.number,
+    title: context.title,
+    url: context.url,
+    branch: context.head_ref,
+    sha: context.head_sha,
+    available: !reason,
+    reason,
+  };
+}
+
 async function ensureCommit(
   repository: LocalRepository,
   context: RecoveryContext,
@@ -146,7 +214,7 @@ async function ensureCommit(
   }
 }
 
-function recordRecovery(
+function recordWorktree(
   context: RecoveryContext,
   sourceSessionId: string,
   sessionId: string,
@@ -170,14 +238,102 @@ function recordRecovery(
       Date.now(),
     );
     db.prepare(
-      `UPDATE agent_session_links SET session_id = ?
-       WHERE inbox_item_id = ? AND provider = 'codex' AND session_id = ?`,
-    ).run(sessionId, context.inbox_item_id, sourceSessionId);
+      `DELETE FROM agent_session_auto_link_suppressions
+       WHERE inbox_item_id = ? AND provider = 'codex'`,
+    ).run(context.inbox_item_id);
+    db.prepare(
+      `INSERT INTO agent_session_links(inbox_item_id, provider, session_id)
+       VALUES (?, 'codex', ?)
+       ON CONFLICT(inbox_item_id, provider)
+       DO UPDATE SET session_id = excluded.session_id`,
+    ).run(context.inbox_item_id, sessionId);
     db.exec("COMMIT");
   } catch (error) {
     db.exec("ROLLBACK");
     throw error;
   }
+}
+
+async function createDetachedWorktree(
+  repository: LocalRepository,
+  context: RecoveryContext,
+) {
+  const worktreeRoot = path.join(
+    path.dirname(mergetrayDatabasePath()),
+    "worktrees",
+  );
+  const worktreePath = path.join(
+    worktreeRoot,
+    `${context.full_name.replaceAll("/", "-")}-pr-${context.number}-${context.head_sha.slice(0, 7)}-${Date.now()}`,
+  );
+  await mkdir(worktreeRoot, { recursive: true });
+  await git(
+    repository.root,
+    "worktree",
+    "add",
+    "--detach",
+    worktreePath,
+    context.head_sha,
+  );
+  return worktreePath;
+}
+
+export async function createCodexThreadForInboxItem(
+  inboxItemId: string,
+  onStage: (stage: CodexTaskSetupStage) => void,
+) {
+  const context = pullRequestContext(inboxItemId);
+  if (!context) throw new Error("This pull request is no longer open.");
+  if (!/^[0-9a-f]{40}$/i.test(context.head_sha)) {
+    throw new Error("The pull request head commit is invalid.");
+  }
+  if (!context.local_path) {
+    throw new Error(
+      `Set a local checkout for ${context.full_name} in Settings first.`,
+    );
+  }
+
+  onStage("preparingCheckout");
+  const repository = await localRepository(
+    context.local_path,
+    context.full_name,
+  );
+  await ensureCommit(repository, context);
+  onStage("creatingWorktree");
+  const worktreePath = await createDetachedWorktree(repository, context);
+
+  onStage("startingTask");
+  let result: { thread: CodexThread };
+  try {
+    result = await codexAppServer.request<{ thread: CodexThread }>(
+      "thread/start",
+      {
+        cwd: worktreePath,
+        approvalPolicy: "on-request",
+        sandbox: "read-only",
+        serviceName: "mergetray",
+      },
+    );
+  } catch (error) {
+    await git(repository.root, "worktree", "remove", worktreePath);
+    throw error;
+  }
+  await codexAppServer.request("thread/name/set", {
+    threadId: result.thread.id,
+    name: `${context.full_name}#${context.number}: ${context.title}`,
+  });
+  await codexAppServer.request("thread/metadata/update", {
+    threadId: result.thread.id,
+    gitInfo: {
+      sha: context.head_sha,
+      branch: context.head_ref,
+      originUrl: repository.originUrl,
+    },
+  });
+
+  onStage("linkingTask");
+  recordWorktree(context, result.thread.id, result.thread.id, worktreePath);
+  return result;
 }
 
 export async function recoverCodexThread(thread: CodexThread) {
@@ -196,23 +352,7 @@ export async function recoverCodexThread(thread: CodexThread) {
   }
   await ensureCommit(repository, context);
 
-  const worktreeRoot = path.join(
-    path.dirname(mergetrayDatabasePath()),
-    "worktrees",
-  );
-  const worktreePath = path.join(
-    worktreeRoot,
-    `${context.full_name.replaceAll("/", "-")}-pr-${context.number}-${context.head_sha.slice(0, 7)}-${Date.now()}`,
-  );
-  await mkdir(worktreeRoot, { recursive: true });
-  await git(
-    repository.root,
-    "worktree",
-    "add",
-    "--detach",
-    worktreePath,
-    context.head_sha,
-  );
+  const worktreePath = await createDetachedWorktree(repository, context);
 
   let fork: { thread: CodexThread };
   try {
@@ -245,7 +385,7 @@ export async function recoverCodexThread(thread: CodexThread) {
       originUrl: repository.originUrl,
     },
   });
-  recordRecovery(context, thread.id, fork.thread.id, worktreePath);
+  recordWorktree(context, thread.id, fork.thread.id, worktreePath);
 
   return { threadId: fork.thread.id };
 }

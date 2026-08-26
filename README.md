@@ -128,11 +128,12 @@ the integration is enabled.
 The `/codex` page can start or resume a local Codex task, stream replies and
 tool activity, surface approval requests, and show the current turn's diff.
 Turns start in a read-only sandbox and require approval before changing files.
-Configure a local checkout for each repository in Settings to recover a linked
-PR task whose original checkout is unavailable. Recovery creates a detached
-worktree at the PR's recorded head commit, forks the Codex task into it, and
-updates the PR link while retaining the original task. MergeTray stores these
-worktrees beside its database and does not remove them automatically.
+Configure a local checkout for each repository in Settings to start or recover
+a task for one of its pull requests. A new PR task is created on the first
+message in a detached worktree at the recorded head commit and linked back to
+the PR. Recovery uses the same kind of worktree, forks the unavailable task,
+and updates the PR link while retaining the original task. MergeTray stores
+these worktrees beside its database and does not remove them automatically.
 
 ## Optional webhook refreshes
 
