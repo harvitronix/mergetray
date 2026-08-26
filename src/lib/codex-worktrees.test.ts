@@ -1,13 +1,22 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { type CodexThread, codexAppServer } from "./codex-app-server.ts";
 import {
+  cleanupCodexManagedWorktree,
   codexNewTask,
   codexRecoveryOption,
   createCodexThreadForInboxItem,
+  listCodexManagedWorktrees,
   recoverCodexThread,
   setRepositoryLocalPath,
 } from "./codex-worktrees.ts";
@@ -139,6 +148,63 @@ describe("Codex worktree recovery", () => {
       source_session_id: "new-session",
       session_id: "new-session",
     });
+  });
+
+  test("tracks and safely cleans a managed worktree", async () => {
+    await setRepositoryLocalPath("1", repository);
+    const methods: string[] = [];
+    let taskCwd = "";
+    vi.spyOn(codexAppServer, "request").mockImplementation((async (
+      method: string,
+      params: Record<string, unknown>,
+    ) => {
+      methods.push(method);
+      if (method === "thread/start") {
+        taskCwd = String(params.cwd);
+        return { thread: { ...thread(taskCwd), id: "managed-session" } };
+      }
+      if (method === "thread/read") {
+        return {
+          thread: {
+            ...thread(taskCwd),
+            id: "managed-session",
+            status: { type: "idle" },
+          },
+        };
+      }
+      if (method === "thread/list") return { data: [] };
+      return {};
+    }) as typeof codexAppServer.request);
+
+    await createCodexThreadForInboxItem("1", () => {});
+    await expect(listCodexManagedWorktrees()).resolves.toMatchObject([
+      { cleanupState: "ready", canCleanup: true, path: taskCwd },
+    ]);
+
+    const untrackedFile = path.join(taskCwd, "unfinished.txt");
+    writeFileSync(untrackedFile, "keep me");
+    await expect(listCodexManagedWorktrees()).resolves.toMatchObject([
+      { cleanupState: "dirty", canCleanup: false },
+    ]);
+    await expect(cleanupCodexManagedWorktree("1")).rejects.toThrow(
+      "Commit or discard the worktree's changes before cleanup.",
+    );
+
+    unlinkSync(untrackedFile);
+    await cleanupCodexManagedWorktree("1");
+    expect(existsSync(taskCwd)).toBe(false);
+    expect(methods).toContain("thread/archive");
+    expect(
+      getDatabase()
+        .prepare("SELECT archived_at, removed_at FROM codex_worktrees")
+        .get(),
+    ).toMatchObject({
+      archived_at: expect.any(Number),
+      removed_at: expect.any(Number),
+    });
+    expect(
+      getDatabase().prepare("SELECT * FROM agent_session_links").get(),
+    ).toBeUndefined();
   });
 
   test("forks an unavailable linked task into a detached worktree", async () => {

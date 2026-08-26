@@ -118,7 +118,9 @@ const schema = `
     path TEXT NOT NULL UNIQUE,
     head_sha TEXT NOT NULL,
     head_ref TEXT NOT NULL,
-    created_at INTEGER NOT NULL
+    created_at INTEGER NOT NULL,
+    archived_at INTEGER,
+    removed_at INTEGER
   );
   CREATE TABLE IF NOT EXISTS github_http_cache (
     cache_key TEXT PRIMARY KEY,
@@ -171,6 +173,15 @@ export function getDatabase() {
     .all() as Array<{ name: string }>;
   if (!repositoryColumns.some((column) => column.name === "local_path")) {
     database.exec("ALTER TABLE repositories ADD COLUMN local_path TEXT");
+  }
+  const worktreeColumns = database
+    .prepare("PRAGMA table_info(codex_worktrees)")
+    .all() as Array<{ name: string }>;
+  if (!worktreeColumns.some((column) => column.name === "archived_at")) {
+    database.exec("ALTER TABLE codex_worktrees ADD COLUMN archived_at INTEGER");
+  }
+  if (!worktreeColumns.some((column) => column.name === "removed_at")) {
+    database.exec("ALTER TABLE codex_worktrees ADD COLUMN removed_at INTEGER");
   }
   return database;
 }

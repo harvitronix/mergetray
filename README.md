@@ -135,6 +135,10 @@ message in a detached worktree at the recorded head commit and linked back to
 the PR. Recovery uses the same kind of worktree, forks the unavailable task,
 and updates the PR link while retaining the original task. MergeTray stores
 these worktrees beside its database and does not remove them automatically.
+Settings lists every outstanding managed worktree and its safety state. Manual
+cleanup is available only when the Codex task is inactive and Git reports a
+clean, registered worktree. Cleanup archives the Codex task, removes and prunes
+the worktree, and retains the cleanup timestamp in MergeTray's registry.
 
 ## Optional webhook refreshes
 
