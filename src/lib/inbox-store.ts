@@ -32,6 +32,7 @@ function repository(row: SqlRow): Repository {
     private: Boolean(row.private),
     archived: Boolean(row.archived),
     removedAt: optionalNumber(row.removed_at),
+    localPath: optionalString(row.local_path),
   };
 }
 

@@ -128,6 +128,11 @@ the integration is enabled.
 The `/codex` page can start or resume a local Codex task, stream replies and
 tool activity, surface approval requests, and show the current turn's diff.
 Turns start in a read-only sandbox and require approval before changing files.
+Configure a local checkout for each repository in Settings to recover a linked
+PR task whose original checkout is unavailable. Recovery creates a detached
+worktree at the PR's recorded head commit, forks the Codex task into it, and
+updates the PR link while retaining the original task. MergeTray stores these
+worktrees beside its database and does not remove them automatically.
 
 ## Optional webhook refreshes
 

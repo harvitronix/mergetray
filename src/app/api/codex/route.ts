@@ -6,6 +6,7 @@ import {
 } from "@/lib/codex-app-server";
 import { inspectCodexCheckout } from "@/lib/codex-checkout";
 import { codexIntegrationEnabled } from "@/lib/codex-integration";
+import { codexRecoveryOption, recoverCodexThread } from "@/lib/codex-worktrees";
 import { isLocalRequest } from "@/lib/local-request";
 
 export const dynamic = "force-dynamic";
@@ -61,9 +62,13 @@ export async function GET(request: Request) {
         "thread/read",
         { threadId, includeTurns: true },
       );
+      const checkout = await inspectCodexCheckout(result.thread);
       return Response.json({
-        checkout: await inspectCodexCheckout(result.thread),
+        checkout,
         messages: codexThreadMessages(result.thread),
+        recovery: checkout.available
+          ? undefined
+          : await codexRecoveryOption(result.thread),
       });
     }
 
@@ -93,7 +98,7 @@ export async function POST(request: Request) {
 
   const body = (await request.json().catch(() => undefined)) as
     | {
-        action?: "turn" | "approval" | "interrupt";
+        action?: "turn" | "approval" | "interrupt" | "recover";
         prompt?: string;
         threadId?: string;
         turnId?: string;
@@ -119,6 +124,34 @@ export async function POST(request: Request) {
       turnId: body.turnId,
     });
     return Response.json({ ok: true });
+  }
+
+  if (body?.action === "recover") {
+    if (!body.threadId) {
+      return Response.json({ error: "Invalid task." }, { status: 400 });
+    }
+    try {
+      const result = await codexAppServer.request<{ thread: CodexThread }>(
+        "thread/read",
+        { threadId: body.threadId, includeTurns: true },
+      );
+      const checkout = await inspectCodexCheckout(result.thread);
+      if (checkout.available) {
+        return Response.json(
+          { error: "This task's checkout is already available." },
+          { status: 409 },
+        );
+      }
+      return Response.json(await recoverCodexThread(result.thread));
+    } catch (error) {
+      return Response.json(
+        {
+          error:
+            error instanceof Error ? error.message : "Task recovery failed.",
+        },
+        { status: 500 },
+      );
+    }
   }
 
   if (body?.action !== "turn" || !body.prompt?.trim()) {
@@ -283,6 +316,9 @@ export async function POST(request: Request) {
             threadId: activeThreadId,
             checkout,
             messages: codexThreadMessages(result.thread),
+            recovery: checkout.available
+              ? undefined
+              : await codexRecoveryOption(result.thread),
           });
           if (!checkout.available) {
             throw new Error(checkout.reason ?? "This checkout is unavailable.");
