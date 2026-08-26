@@ -17,8 +17,10 @@ import {
   Check,
   ChevronRight,
   CircleCheck,
+  ExternalLink,
   FileDiff,
   GitFork,
+  GitPullRequest,
   LoaderCircle,
   Send,
   ShieldCheck,
@@ -32,7 +34,11 @@ import remarkGfm from "remark-gfm";
 import { Notice, Surface } from "@/components/app-ui";
 import type { CodexChatMessage } from "@/lib/codex-app-server";
 import type { CodexCheckout } from "@/lib/codex-checkout";
-import type { CodexRecoveryOption } from "@/lib/codex-worktrees";
+import type {
+  CodexNewTask,
+  CodexRecoveryOption,
+  CodexTaskSetupStage,
+} from "@/lib/codex-worktrees";
 
 type ChatMessage = ThreadMessageLike & { id: string };
 type MessageKind = "message" | "reasoning";
@@ -58,8 +64,10 @@ type Approval = {
   command?: string;
   reason?: string;
 };
+type SetupStage = CodexTaskSetupStage | "startingTurn";
 
 type StreamEvent =
+  | { type: "setup"; stage: SetupStage }
   | {
       type: "thread";
       threadId: string;
@@ -88,6 +96,29 @@ type StreamEvent =
   | { type: "diff"; diff: string }
   | { type: "completed"; status: string; error?: string }
   | { type: "error"; message: string };
+
+const setupStatus: Record<SetupStage, { label: string; detail: string }> = {
+  preparingCheckout: {
+    label: "Preparing the PR checkout",
+    detail: "Making sure the pull request commit is available locally.",
+  },
+  creatingWorktree: {
+    label: "Creating a dedicated worktree",
+    detail: "Checking out the PR commit without changing your main checkout.",
+  },
+  startingTask: {
+    label: "Starting the Codex task",
+    detail: "Connecting the new task to its worktree.",
+  },
+  linkingTask: {
+    label: "Linking the task to this pull request",
+    detail: "Saving the task so it reopens from MergeTray next time.",
+  },
+  startingTurn: {
+    label: "Sending your message to Codex",
+    detail: "Setup is complete. Codex is about to begin working.",
+  },
+};
 
 function UserMessage() {
   return (
@@ -244,12 +275,14 @@ function appendAssistantDelta(message: ChatMessage, delta: string) {
 export function CodexChat({
   defaultCheckout,
   initialError,
+  initialNewTask,
   initialThread,
   initialThreads,
   version,
 }: {
   defaultCheckout: CodexCheckout;
   initialError?: string;
+  initialNewTask?: CodexNewTask;
   initialThread?: CodexInitialThread;
   initialThreads: ThreadSummary[];
   version: string;
@@ -267,6 +300,8 @@ export function CodexChat({
   const [recovery, setRecovery] = useState<CodexRecoveryOption | undefined>(
     initialThread?.recovery,
   );
+  const [newTask, setNewTask] = useState(initialNewTask);
+  const [setupStage, setSetupStage] = useState<SetupStage>();
   const [turnId, setTurnId] = useState<string>();
   const [activities, setActivities] = useState<Activity[]>([]);
   const [approval, setApproval] = useState<Approval>();
@@ -311,7 +346,7 @@ export function CodexChat({
   const onNew = useCallback(
     async (message: AppendMessage) => {
       const prompt = messageText(message).trim();
-      if (!prompt || !checkout?.available) return;
+      if (!prompt || !(newTask?.available ?? checkout?.available)) return;
 
       const userMessage = chatMessage({
         id: crypto.randomUUID(),
@@ -325,20 +360,30 @@ export function CodexChat({
       setError(undefined);
       setIsRunning(true);
       setTurnStatus("running");
+      setSetupStage(newTask ? "preparingCheckout" : undefined);
       let sawTerminalEvent = false;
       let sawFinalAnswer = false;
 
       const receive = (event: StreamEvent) => {
-        if (event.type === "thread") {
+        if (event.type === "setup") {
+          setSetupStage(event.stage);
+        } else if (event.type === "thread") {
           setThreadId(event.threadId);
           setCheckout(event.checkout);
           setRecovery(event.recovery);
+          setNewTask(undefined);
           setMessages([
             ...event.messages.map((item) => chatMessage(item)),
             userMessage,
           ]);
+          window.history.replaceState(
+            null,
+            "",
+            `/codex?thread=${encodeURIComponent(event.threadId)}`,
+          );
         } else if (event.type === "turn") {
           setTurnId(event.turnId);
+          setSetupStage(undefined);
         } else if (event.type === "assistantItemStarted") {
           if (event.phase === "final_answer") sawFinalAnswer = true;
           setMessages((current) => [
@@ -417,6 +462,7 @@ export function CodexChat({
           sawTerminalEvent = true;
           const isIncomplete = event.status === "completed" && !sawFinalAnswer;
           setIsRunning(false);
+          setSetupStage(undefined);
           setTurnStatus(
             isIncomplete
               ? "incomplete"
@@ -454,6 +500,7 @@ export function CodexChat({
           sawTerminalEvent = true;
           setError(event.message);
           setIsRunning(false);
+          setSetupStage(undefined);
           setTurnStatus("failed");
         }
       };
@@ -467,6 +514,7 @@ export function CodexChat({
               action: "turn",
               prompt,
               threadId,
+              inboxItemId: newTask?.inboxItemId,
             }),
           }),
           receive,
@@ -481,10 +529,11 @@ export function CodexChat({
           turnError instanceof Error ? turnError.message : "Codex turn failed.",
         );
         setIsRunning(false);
+        setSetupStage(undefined);
         setTurnStatus("failed");
       }
     },
-    [checkout?.available, loadThreads, threadId],
+    [checkout?.available, loadThreads, newTask, threadId],
   );
 
   const onCancel = useCallback(async () => {
@@ -507,6 +556,8 @@ export function CodexChat({
 
   async function selectThread(id: string) {
     setThreadId(id || undefined);
+    setNewTask(undefined);
+    setSetupStage(undefined);
     setCheckout(id ? undefined : defaultCheckout);
     setRecovery(undefined);
     setMessages([]);
@@ -517,6 +568,7 @@ export function CodexChat({
     setTurnStatus("ready");
     if (!id) {
       setIsLoadingThread(false);
+      window.history.replaceState(null, "", "/codex");
       return;
     }
 
@@ -619,6 +671,9 @@ export function CodexChat({
     interrupted: "Turn stopped",
     failed: "Turn failed",
   }[turnStatus];
+  const currentStatusLabel = setupStage
+    ? setupStatus[setupStage].label
+    : turnStatusLabel;
   const checkoutKind =
     checkout?.kind === "worktree"
       ? "Worktree"
@@ -631,7 +686,9 @@ export function CodexChat({
       ? `detached @ ${checkout.sha.slice(0, 7)}`
       : "Git unavailable");
   const canSend =
-    checkout?.available === true && !isLoadingThread && !isRecovering;
+    (newTask?.available ?? checkout?.available) === true &&
+    !isLoadingThread &&
+    !isRecovering;
 
   return (
     <div className="grid h-full min-h-0 gap-4 overflow-x-hidden overflow-y-auto xl:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.65fr)] xl:overflow-hidden">
@@ -640,12 +697,17 @@ export function CodexChat({
           <div className="min-w-0">
             <p className="text-sm font-semibold">Codex</p>
             <p className="truncate text-xs font-medium text-foreground/65">
-              {checkout
-                ? `${checkout.project} · ${checkoutKind} · ${checkoutGit}`
-                : "Inspecting checkout…"}
+              {newTask
+                ? `${newTask.repository}#${newTask.number} · New worktree · ${newTask.branch}`
+                : checkout
+                  ? `${checkout.project} · ${checkoutKind} · ${checkoutGit}`
+                  : "Inspecting checkout…"}
             </p>
             <p className="truncate text-xs text-foreground/40">
-              {version} · {checkout?.cwd ?? "Loading checkout…"}
+              {version} ·{" "}
+              {newTask
+                ? `PR commit ${newTask.sha.slice(0, 7)}`
+                : (checkout?.cwd ?? "Loading checkout…")}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -657,7 +719,7 @@ export function CodexChat({
               Auto-review on
             </span>
             <span className="inline-flex h-8 items-center gap-1.5 rounded-full border border-foreground/10 px-2.5 text-xs font-medium text-foreground/60">
-              {turnStatus === "running" ? (
+              {setupStage || turnStatus === "running" ? (
                 <LoaderCircle className="size-3.5 animate-spin" />
               ) : turnStatus === "awaitingApproval" ? (
                 <ShieldQuestion className="size-3.5 text-[var(--warning-text)]" />
@@ -668,7 +730,7 @@ export function CodexChat({
                 turnStatus === "incomplete" ? (
                 <X className="size-3.5 text-[var(--danger-text)]" />
               ) : null}
-              {turnStatusLabel}
+              {currentStatusLabel}
             </span>
             <select
               value={threadId ?? ""}
@@ -690,6 +752,39 @@ export function CodexChat({
         {error ? (
           <Notice tone="danger" className="mx-4 mt-4">
             {error}
+          </Notice>
+        ) : null}
+
+        {newTask ? (
+          <div className="app-inset-surface mx-4 mt-4 flex min-w-0 items-start gap-3 p-3">
+            <GitPullRequest className="mt-0.5 size-4 shrink-0" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold">
+                New task for {newTask.repository}#{newTask.number}
+              </p>
+              <p className="mt-0.5 truncate text-sm text-foreground/60">
+                {newTask.title}
+              </p>
+              <p className="mt-1 truncate font-mono text-xs text-foreground/45">
+                {newTask.branch} @ {newTask.sha.slice(0, 7)}
+              </p>
+            </div>
+            <a
+              href={newTask.url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-foreground/55"
+            >
+              PR
+              <ExternalLink className="size-3" />
+            </a>
+          </div>
+        ) : null}
+
+        {newTask && !newTask.available ? (
+          <Notice tone="danger" className="mx-4 mt-4">
+            {newTask.reason} Input is disabled until this is fixed.{" "}
+            <a href="/settings">Open Settings</a>
           </Notice>
         ) : null}
 
@@ -723,7 +818,10 @@ export function CodexChat({
           </Notice>
         ) : null}
 
-        <AssistantRuntimeProvider key={threadId ?? "new"} runtime={runtime}>
+        <AssistantRuntimeProvider
+          key={threadId ?? newTask?.inboxItemId ?? "new"}
+          runtime={runtime}
+        >
           <ThreadPrimitive.Root className="flex min-h-0 flex-1 flex-col">
             <ThreadPrimitive.Viewport
               autoScroll
@@ -735,10 +833,15 @@ export function CodexChat({
               <ThreadPrimitive.Empty>
                 <div className="m-auto max-w-md py-16 text-center">
                   <Bot className="mx-auto size-8 text-foreground/35" />
-                  <p className="mt-3 font-semibold">Start a Codex task</p>
+                  <p className="mt-3 font-semibold">
+                    {newTask
+                      ? "Start a task for this PR"
+                      : "Start a Codex task"}
+                  </p>
                   <p className="mt-1 text-sm text-foreground/50">
-                    Ask a question, run a command, or request a tiny file
-                    change.
+                    {newTask
+                      ? "Your first message will create a dedicated worktree and link the new task to this pull request."
+                      : "Ask a question, run a command, or request a tiny file change."}
                   </p>
                 </div>
               </ThreadPrimitive.Empty>
@@ -746,6 +849,23 @@ export function CodexChat({
                 <ThreadPrimitive.Messages
                   components={{ UserMessage, AssistantMessage }}
                 />
+                {setupStage ? (
+                  <div
+                    role="status"
+                    aria-live="polite"
+                    className="app-inset-surface flex items-start gap-3 p-3"
+                  >
+                    <LoaderCircle className="mt-0.5 size-4 shrink-0 animate-spin" />
+                    <div>
+                      <p className="text-sm font-semibold">
+                        {setupStatus[setupStage].label}
+                      </p>
+                      <p className="mt-0.5 text-xs text-foreground/50">
+                        {setupStatus[setupStage].detail}
+                      </p>
+                    </div>
+                  </div>
+                ) : null}
               </div>
               <ThreadPrimitive.ViewportFooter className="sticky bottom-0 mt-auto pt-5">
                 <ComposerPrimitive.Root className="app-inset-surface flex items-end gap-2 p-2 shadow-sm">
@@ -753,7 +873,9 @@ export function CodexChat({
                     disabled={!canSend}
                     placeholder={
                       canSend
-                        ? "Ask Codex to inspect or change this repo…"
+                        ? newTask
+                          ? "Send the first message to create this PR task…"
+                          : "Ask Codex to inspect or change this repo…"
                         : "Checkout unavailable"
                     }
                     rows={1}
@@ -778,10 +900,10 @@ export function CodexChat({
         </AssistantRuntimeProvider>
       </Surface>
 
-      <div className="grid min-w-0 content-start gap-4 xl:h-full xl:min-h-0 xl:overflow-y-auto">
+      <div className="grid min-w-0 max-w-full content-start gap-4 overflow-x-hidden xl:h-full xl:min-h-0 xl:overflow-y-auto">
         {approval ? (
-          <Surface className="border-amber-500/35 p-4">
-            <div className="flex items-start gap-3">
+          <Surface className="min-w-0 max-w-full overflow-hidden border-amber-500/35 p-4">
+            <div className="flex min-w-0 items-start gap-3">
               <ShieldQuestion className="mt-0.5 size-5 shrink-0 text-[var(--warning-text)]" />
               <div className="min-w-0 flex-1">
                 <p className="font-semibold">Approval required</p>
@@ -792,7 +914,7 @@ export function CodexChat({
                       : "Codex wants to run a command outside the sandbox.")}
                 </p>
                 {approval.command ? (
-                  <code className="mt-3 block overflow-x-auto rounded-md bg-background p-2 text-xs">
+                  <code className="mt-3 block max-w-full whitespace-pre-wrap break-all rounded-md bg-background p-2 text-xs">
                     {approval.command}
                   </code>
                 ) : null}
@@ -826,7 +948,7 @@ export function CodexChat({
           </Surface>
         ) : null}
 
-        <Surface className="p-4">
+        <Surface className="min-w-0 max-w-full overflow-hidden p-4">
           <div className="flex items-center justify-between gap-3">
             <h2 className="flex items-center gap-2 text-sm font-semibold">
               <Terminal className="size-4" />
@@ -837,17 +959,21 @@ export function CodexChat({
             ) : null}
           </div>
           {activities.length ? (
-            <div className="mt-3 grid gap-2">
+            <div className="mt-3 grid min-w-0 gap-2">
               {activities.map((item) => (
-                <Surface key={item.id} variant="inset" className="p-3">
-                  <div className="flex items-start gap-2">
+                <Surface
+                  key={item.id}
+                  variant="inset"
+                  className="min-w-0 max-w-full overflow-hidden p-3"
+                >
+                  <div className="flex min-w-0 items-start gap-2">
                     {item.kind === "command" ? (
                       <Terminal className="mt-0.5 size-3.5 shrink-0" />
                     ) : (
                       <FileDiff className="mt-0.5 size-3.5 shrink-0" />
                     )}
                     <div className="min-w-0 flex-1">
-                      <p className="break-words font-mono text-xs">
+                      <p className="break-all font-mono text-xs">
                         {item.title || "File change"}
                       </p>
                       <p className="mt-1 text-[0.68rem] uppercase tracking-wide text-foreground/40">
@@ -856,7 +982,7 @@ export function CodexChat({
                     </div>
                   </div>
                   {item.detail ? (
-                    <pre className="mt-2 max-h-44 overflow-auto whitespace-pre-wrap rounded bg-background p-2 text-xs">
+                    <pre className="mt-2 max-h-44 max-w-full overflow-x-hidden overflow-y-auto whitespace-pre-wrap break-all rounded bg-background p-2 text-xs">
                       {item.detail}
                     </pre>
                   ) : null}
@@ -870,13 +996,13 @@ export function CodexChat({
           )}
         </Surface>
 
-        <Surface className="p-4">
+        <Surface className="min-w-0 max-w-full overflow-hidden p-4">
           <h2 className="flex items-center gap-2 text-sm font-semibold">
             <FileDiff className="size-4" />
             Turn diff
           </h2>
           {diff ? (
-            <pre className="mt-3 max-h-[32rem] overflow-auto whitespace-pre-wrap rounded-md bg-background p-3 text-xs leading-5">
+            <pre className="mt-3 max-h-[32rem] max-w-full overflow-x-hidden overflow-y-auto whitespace-pre-wrap break-all rounded-md bg-background p-3 text-xs leading-5">
               {diff}
             </pre>
           ) : (

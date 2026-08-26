@@ -24,18 +24,8 @@ export function codexSessionUrl(sessionId: string) {
   return `/codex?thread=${encodeURIComponent(sessionId)}`;
 }
 
-export function newCodexSessionUrl(pullRequest: {
-  repository: string;
-  number: number;
-  title: string;
-  url: string;
-  branch: string;
-}) {
-  const params = new URLSearchParams({
-    originUrl: `git@github.com:${pullRequest.repository}.git`,
-    prompt: `Continue wrapping up ${pullRequest.repository}#${pullRequest.number}: ${pullRequest.title}\nPR: ${pullRequest.url}\nBranch: ${pullRequest.branch}`,
-  });
-  return `codex://threads/new?${params}`;
+export function newCodexTaskUrl(inboxItemId: string) {
+  return `/codex?newFor=${encodeURIComponent(inboxItemId)}`;
 }
 
 export function githubRepository(originUrl: string) {

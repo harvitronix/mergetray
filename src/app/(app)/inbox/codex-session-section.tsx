@@ -3,7 +3,7 @@
 import { Bot, ExternalLink, Link2, Plus, Unlink, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { codexSessionUrl, newCodexSessionUrl } from "@/lib/codex-links";
+import { codexSessionUrl, newCodexTaskUrl } from "@/lib/codex-links";
 import type { AgentSessionLookup, InboxRow } from "@/lib/models";
 import {
   dismissCodexSession,
@@ -100,13 +100,7 @@ export function CodexSessionSection({
 
   if (!details || !repository) return null;
 
-  const newSessionUrl = newCodexSessionUrl({
-    repository: repository.fullName,
-    number: row.item.number,
-    title: row.item.title,
-    url: row.item.url,
-    branch: details.headRef,
-  });
+  const newSessionUrl = newCodexTaskUrl(row.item.id);
 
   return (
     <section aria-labelledby="codex-heading">
@@ -251,8 +245,7 @@ export function CodexSessionSection({
           className="inline-flex h-9 items-center gap-1.5 rounded-md border border-foreground/10 bg-background/70 px-3 text-xs font-semibold"
         >
           <Plus className="size-3.5" />
-          New in Codex app
-          <ExternalLink className="size-3" />
+          New Codex task
         </a>
         <details className="relative">
           <summary className="inline-flex h-9 cursor-pointer list-none items-center gap-1.5 rounded-md border border-foreground/10 bg-background/70 px-3 text-xs font-semibold">

@@ -5,7 +5,9 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { type CodexThread, codexAppServer } from "./codex-app-server.ts";
 import {
+  codexNewTask,
   codexRecoveryOption,
+  createCodexThreadForInboxItem,
   recoverCodexThread,
   setRepositoryLocalPath,
 } from "./codex-worktrees.ts";
@@ -92,6 +94,51 @@ describe("Codex worktree recovery", () => {
     await expect(
       setRepositoryLocalPath("1", path.join(directory, "missing")),
     ).rejects.toThrow("Choose an available Git checkout of acme/widgets.");
+    await expect(codexNewTask("1")).resolves.toMatchObject({
+      repository: "acme/widgets",
+      number: 7,
+      available: true,
+    });
+  });
+
+  test("creates and links a new PR task in a detached worktree", async () => {
+    await setRepositoryLocalPath("1", repository);
+    const stages: string[] = [];
+    let taskCwd = "";
+    vi.spyOn(codexAppServer, "request").mockImplementation((async (
+      method: string,
+      params: Record<string, unknown>,
+    ) => {
+      if (method === "thread/start") {
+        taskCwd = String(params.cwd);
+        return { thread: { ...thread(taskCwd), id: "new-session" } };
+      }
+      return {};
+    }) as typeof codexAppServer.request);
+
+    await expect(
+      createCodexThreadForInboxItem("1", (stage) => stages.push(stage)),
+    ).resolves.toMatchObject({ thread: { id: "new-session" } });
+
+    expect(stages).toEqual([
+      "preparingCheckout",
+      "creatingWorktree",
+      "startingTask",
+      "linkingTask",
+    ]);
+    expect(git(taskCwd, "rev-parse", "HEAD")).toBe(headSha);
+    expect(git(taskCwd, "rev-parse", "--abbrev-ref", "HEAD")).toBe("HEAD");
+    expect(
+      getDatabase().prepare("SELECT session_id FROM agent_session_links").get(),
+    ).toEqual({ session_id: "new-session" });
+    expect(
+      getDatabase()
+        .prepare("SELECT source_session_id, session_id FROM codex_worktrees")
+        .get(),
+    ).toEqual({
+      source_session_id: "new-session",
+      session_id: "new-session",
+    });
   });
 
   test("forks an unavailable linked task into a detached worktree", async () => {
