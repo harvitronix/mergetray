@@ -23,6 +23,7 @@ import {
   GitPullRequest,
   LoaderCircle,
   Send,
+  ShieldCheck,
   ShieldQuestion,
   Square,
   Terminal,
@@ -710,6 +711,13 @@ export function CodexChat({
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <span
+              className="inline-flex h-8 items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 text-xs font-medium text-[var(--success-text)]"
+              title="Codex automatically reviews approval requests"
+            >
+              <ShieldCheck className="size-3.5" />
+              Auto-review on
+            </span>
             <span className="inline-flex h-8 items-center gap-1.5 rounded-full border border-foreground/10 px-2.5 text-xs font-medium text-foreground/60">
               {setupStage || turnStatus === "running" ? (
                 <LoaderCircle className="size-3.5 animate-spin" />

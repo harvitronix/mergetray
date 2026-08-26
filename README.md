@@ -127,7 +127,8 @@ the integration is enabled.
 
 The `/codex` page can start or resume a local Codex task, stream replies and
 tool activity, surface approval requests, and show the current turn's diff.
-Turns start in a read-only sandbox and require approval before changing files.
+Turns start in a read-only sandbox, with approval requests reviewed
+automatically by Codex.
 Configure a local checkout for each repository in Settings to start or recover
 a task for one of its pull requests. A new PR task is created on the first
 message in a detached worktree at the recorded head commit and linked back to

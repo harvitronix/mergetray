@@ -310,6 +310,7 @@ export async function createCodexThreadForInboxItem(
       {
         cwd: worktreePath,
         approvalPolicy: "on-request",
+        approvalsReviewer: "auto_review",
         sandbox: "read-only",
         serviceName: "mergetray",
       },
@@ -362,6 +363,7 @@ export async function recoverCodexThread(thread: CodexThread) {
         threadId: thread.id,
         cwd: worktreePath,
         approvalPolicy: "on-request",
+        approvalsReviewer: "auto_review",
         sandbox: "read-only",
         serviceName: "mergetray",
       },
