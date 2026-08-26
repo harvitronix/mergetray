@@ -8,6 +8,7 @@ import {
   codexIntegrationEnabled,
   codexIntegrationSetting,
 } from "@/lib/codex-integration";
+import { setRepositoryLocalPath } from "@/lib/codex-worktrees";
 import { setSetting, setting } from "@/lib/database";
 import { githubAuthStatus } from "@/lib/github-auth";
 import { githubSyncState, syncGithub } from "@/lib/github-sync";
@@ -24,6 +25,8 @@ export default async function SettingsPage({
     syncFailed?: string;
     synced?: string;
     codexUpdated?: string;
+    repositoryPathUpdated?: string;
+    repositoryPathError?: string;
   }>;
 }) {
   const query = await searchParams;
@@ -57,6 +60,27 @@ export default async function SettingsPage({
     );
     revalidatePath("/", "layout");
     redirect("/settings?codexUpdated=1");
+  }
+
+  async function updateRepositoryPath(formData: FormData) {
+    "use server";
+
+    const repositoryId = String(formData.get("repositoryId") ?? "");
+    const localPath = String(formData.get("localPath") ?? "");
+    let error: string | undefined;
+    try {
+      await setRepositoryLocalPath(repositoryId, localPath);
+    } catch (updateError) {
+      error =
+        updateError instanceof Error
+          ? updateError.message
+          : "Local checkout could not be saved.";
+    }
+    if (error) {
+      redirect(`/settings?repositoryPathError=${encodeURIComponent(error)}`);
+    }
+    revalidatePath("/", "layout");
+    redirect("/settings?repositoryPathUpdated=1");
   }
 
   return (
@@ -99,6 +123,16 @@ export default async function SettingsPage({
             Codex integration {codexEnabled ? "enabled" : "disabled"}.
           </Notice>
         ) : null}
+        {query.repositoryPathUpdated ? (
+          <Notice tone="success" className="mt-5">
+            Local checkout saved.
+          </Notice>
+        ) : null}
+        {query.repositoryPathError ? (
+          <Notice tone="danger" className="mt-5">
+            {query.repositoryPathError}
+          </Notice>
+        ) : null}
 
         <Surface variant="inset" className="mt-5 px-3 py-3 text-sm">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -125,6 +159,52 @@ export default async function SettingsPage({
             </form>
           </div>
         </Surface>
+
+        {repositories.length ? (
+          <div className="mt-5 border-t border-foreground/10 pt-5">
+            <h3 className="text-sm font-semibold">Local checkouts</h3>
+            <p className="mt-1 text-sm text-foreground/55">
+              MergeTray uses these repositories to create replacement worktrees
+              for unavailable PR tasks.
+            </p>
+            <div className="mt-3 grid gap-3">
+              {repositories.map((repository) => (
+                <form
+                  key={repository.id}
+                  action={updateRepositoryPath}
+                  className="app-inset-surface grid gap-2 px-3 py-3 sm:grid-cols-[minmax(10rem,0.45fr)_minmax(16rem,1fr)_auto] sm:items-end"
+                >
+                  <input
+                    type="hidden"
+                    name="repositoryId"
+                    value={repository.id}
+                  />
+                  <div className="grid gap-1 text-xs font-medium">
+                    Repository
+                    <span className="h-9 truncate py-2 font-mono text-sm">
+                      {repository.fullName}
+                    </span>
+                  </div>
+                  <label className="grid gap-1 text-xs font-medium">
+                    Local checkout path
+                    <input
+                      name="localPath"
+                      defaultValue={repository.localPath ?? ""}
+                      placeholder={`/path/to/${repository.name}`}
+                      className="h-9 min-w-0 rounded-md border border-foreground/10 bg-background px-3 font-mono text-sm"
+                    />
+                  </label>
+                  <button
+                    type="submit"
+                    className="h-9 rounded-md border border-foreground/10 bg-background/70 px-3 text-xs font-semibold"
+                  >
+                    Save
+                  </button>
+                </form>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </Surface>
 
       <Surface className="mt-4 p-5">

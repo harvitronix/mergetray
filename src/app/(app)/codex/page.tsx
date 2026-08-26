@@ -10,6 +10,7 @@ import {
   codexIntegrationEnabled,
 } from "@/lib/codex-integration";
 import { codexSessionId } from "@/lib/codex-links";
+import { codexRecoveryOption } from "@/lib/codex-worktrees";
 import { CodexChat, type CodexInitialThread } from "./codex-chat";
 
 function threadSummary(thread: CodexThread) {
@@ -76,6 +77,9 @@ export default async function CodexPage({
           checkout: await inspectCodexCheckout(result.thread),
           messages: codexThreadMessages(result.thread),
         };
+        if (!initialThread.checkout.available) {
+          initialThread.recovery = await codexRecoveryOption(result.thread);
+        }
         if (!initialThreads.some((thread) => thread.id === result.thread.id)) {
           initialThreads.unshift(threadSummary(result.thread));
         }

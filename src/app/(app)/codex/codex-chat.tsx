@@ -18,6 +18,7 @@ import {
   ChevronRight,
   CircleCheck,
   FileDiff,
+  GitFork,
   LoaderCircle,
   Send,
   ShieldQuestion,
@@ -30,6 +31,7 @@ import remarkGfm from "remark-gfm";
 import { Notice, Surface } from "@/components/app-ui";
 import type { CodexChatMessage } from "@/lib/codex-app-server";
 import type { CodexCheckout } from "@/lib/codex-checkout";
+import type { CodexRecoveryOption } from "@/lib/codex-worktrees";
 
 type ChatMessage = ThreadMessageLike & { id: string };
 type MessageKind = "message" | "reasoning";
@@ -39,6 +41,7 @@ export type CodexInitialThread = {
   id: string;
   checkout: CodexCheckout;
   messages: CodexChatMessage[];
+  recovery?: CodexRecoveryOption;
 };
 type Activity = {
   id: string;
@@ -61,6 +64,7 @@ type StreamEvent =
       threadId: string;
       checkout: CodexCheckout;
       messages: CodexChatMessage[];
+      recovery?: CodexRecoveryOption;
     }
   | { type: "turn"; threadId: string; turnId: string }
   | {
@@ -259,6 +263,9 @@ export function CodexChat({
   const [checkout, setCheckout] = useState<CodexCheckout | undefined>(
     initialThread?.checkout ?? defaultCheckout,
   );
+  const [recovery, setRecovery] = useState<CodexRecoveryOption | undefined>(
+    initialThread?.recovery,
+  );
   const [turnId, setTurnId] = useState<string>();
   const [activities, setActivities] = useState<Activity[]>([]);
   const [approval, setApproval] = useState<Approval>();
@@ -267,6 +274,7 @@ export function CodexChat({
   const [isRunning, setIsRunning] = useState(false);
   const [isLoadingThread, setIsLoadingThread] = useState(false);
   const [isLoadingThreads, setIsLoadingThreads] = useState(false);
+  const [isRecovering, setIsRecovering] = useState(false);
   const [turnStatus, setTurnStatus] = useState<
     | "ready"
     | "running"
@@ -323,6 +331,7 @@ export function CodexChat({
         if (event.type === "thread") {
           setThreadId(event.threadId);
           setCheckout(event.checkout);
+          setRecovery(event.recovery);
           setMessages([
             ...event.messages.map((item) => chatMessage(item)),
             userMessage,
@@ -498,6 +507,7 @@ export function CodexChat({
   async function selectThread(id: string) {
     setThreadId(id || undefined);
     setCheckout(id ? undefined : defaultCheckout);
+    setRecovery(undefined);
     setMessages([]);
     setActivities([]);
     setApproval(undefined);
@@ -517,17 +527,54 @@ export function CodexChat({
       const result = (await response.json()) as {
         checkout: CodexCheckout;
         messages?: CodexChatMessage[];
+        recovery?: CodexRecoveryOption;
         error?: string;
       };
       if (!response.ok) throw new Error(result.error);
       setCheckout(result.checkout);
+      setRecovery(result.recovery);
       setMessages((result.messages ?? []).map((item) => chatMessage(item)));
+      window.history.replaceState(
+        null,
+        "",
+        `/codex?thread=${encodeURIComponent(id)}`,
+      );
     } catch (loadError) {
       setError(
         loadError instanceof Error ? loadError.message : "Task load failed.",
       );
     } finally {
       setIsLoadingThread(false);
+    }
+  }
+
+  async function recoverThread() {
+    if (!threadId || !recovery?.available) return;
+    setIsRecovering(true);
+    setError(undefined);
+    try {
+      const response = await fetch("/api/codex", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "recover", threadId }),
+      });
+      const result = (await response.json()) as {
+        threadId?: string;
+        error?: string;
+      };
+      if (!response.ok || !result.threadId) {
+        throw new Error(result.error ?? "Task recovery failed.");
+      }
+      await selectThread(result.threadId);
+      await loadThreads();
+    } catch (recoveryError) {
+      setError(
+        recoveryError instanceof Error
+          ? recoveryError.message
+          : "Task recovery failed.",
+      );
+    } finally {
+      setIsRecovering(false);
     }
   }
 
@@ -582,7 +629,8 @@ export function CodexChat({
     (checkout?.sha
       ? `detached @ ${checkout.sha.slice(0, 7)}`
       : "Git unavailable");
-  const canSend = checkout?.available === true && !isLoadingThread;
+  const canSend =
+    checkout?.available === true && !isLoadingThread && !isRecovering;
 
   return (
     <div className="grid h-full min-h-0 gap-4 overflow-x-hidden overflow-y-auto xl:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.65fr)] xl:overflow-hidden">
@@ -639,8 +687,31 @@ export function CodexChat({
 
         {checkout && !checkout.available ? (
           <Notice tone="danger" className="mx-4 mt-4">
-            {checkout.reason} Input is disabled until the checkout is available
-            again.
+            <p>
+              {checkout.reason} Input is disabled until the checkout is
+              available again.
+            </p>
+            {recovery?.available ? (
+              <button
+                type="button"
+                disabled={isRecovering}
+                onClick={() => void recoverThread()}
+                className="mt-3 inline-flex h-9 items-center gap-1.5 rounded-md bg-[var(--selected-control-bg)] px-3 text-xs font-semibold text-[var(--selected-control-fg)] disabled:opacity-50"
+              >
+                {isRecovering ? (
+                  <LoaderCircle className="size-3.5 animate-spin" />
+                ) : (
+                  <GitFork className="size-3.5" />
+                )}
+                {isRecovering
+                  ? "Creating worktree…"
+                  : "Continue in new worktree"}
+              </button>
+            ) : recovery ? (
+              <p className="mt-2 text-sm">
+                {recovery.reason} <a href="/settings">Open Settings</a>
+              </p>
+            ) : null}
           </Notice>
         ) : null}
 

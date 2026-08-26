@@ -7,6 +7,7 @@ export type Repository = {
   private: boolean;
   archived: boolean;
   removedAt?: number;
+  localPath?: string;
 };
 
 export type InboxItem = {

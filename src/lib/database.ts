@@ -19,7 +19,8 @@ const schema = `
     private INTEGER NOT NULL,
     archived INTEGER NOT NULL,
     selected INTEGER NOT NULL DEFAULT 1,
-    removed_at INTEGER
+    removed_at INTEGER,
+    local_path TEXT
   );
   CREATE TABLE IF NOT EXISTS inbox_items (
     id INTEGER PRIMARY KEY,
@@ -109,6 +110,16 @@ const schema = `
     provider TEXT NOT NULL,
     PRIMARY KEY(inbox_item_id, provider)
   );
+  CREATE TABLE IF NOT EXISTS codex_worktrees (
+    id INTEGER PRIMARY KEY,
+    inbox_item_id INTEGER NOT NULL REFERENCES inbox_items(id) ON DELETE CASCADE,
+    source_session_id TEXT NOT NULL,
+    session_id TEXT NOT NULL UNIQUE,
+    path TEXT NOT NULL UNIQUE,
+    head_sha TEXT NOT NULL,
+    head_ref TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
   CREATE TABLE IF NOT EXISTS github_http_cache (
     cache_key TEXT PRIMARY KEY,
     etag TEXT,
@@ -154,6 +165,12 @@ export function getDatabase() {
     database.exec(
       "ALTER TABLE pull_request_details ADD COLUMN auto_merge_enabled INTEGER NOT NULL DEFAULT 0",
     );
+  }
+  const repositoryColumns = database
+    .prepare("PRAGMA table_info(repositories)")
+    .all() as Array<{ name: string }>;
+  if (!repositoryColumns.some((column) => column.name === "local_path")) {
+    database.exec("ALTER TABLE repositories ADD COLUMN local_path TEXT");
   }
   return database;
 }
