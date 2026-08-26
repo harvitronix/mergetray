@@ -158,7 +158,6 @@ export function CodexSessionSection({
               className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-[var(--selected-control-bg)] px-2.5 text-xs font-semibold text-[var(--selected-control-fg)]"
             >
               Open
-              <ExternalLink className="size-3" />
             </a>
           )}
           <form action={unlinkSession}>
@@ -252,7 +251,8 @@ export function CodexSessionSection({
           className="inline-flex h-9 items-center gap-1.5 rounded-md border border-foreground/10 bg-background/70 px-3 text-xs font-semibold"
         >
           <Plus className="size-3.5" />
-          New Codex task
+          New in Codex app
+          <ExternalLink className="size-3" />
         </a>
         <details className="relative">
           <summary className="inline-flex h-9 cursor-pointer list-none items-center gap-1.5 rounded-md border border-foreground/10 bg-background/70 px-3 text-xs font-semibold">
