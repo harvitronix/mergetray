@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { connection } from "next/server";
 import type { ReactNode } from "react";
+import { codexIntegrationEnabled } from "@/lib/codex-integration";
 import { setting } from "@/lib/database";
 import { githubDataRevision, githubSyncNeeded } from "@/lib/github-sync";
 import {
@@ -24,7 +25,11 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       data-app-theme={theme}
       className="min-h-screen bg-background text-foreground"
     >
-      <AppShell counts={counts} repositories={repositories}>
+      <AppShell
+        codexEnabled={codexIntegrationEnabled()}
+        counts={counts}
+        repositories={repositories}
+      >
         {children}
       </AppShell>
       <BackgroundSync

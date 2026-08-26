@@ -21,7 +21,7 @@ export function codexSessionId(value: string) {
 }
 
 export function codexSessionUrl(sessionId: string) {
-  return `codex://threads/${sessionId}`;
+  return `/codex?thread=${encodeURIComponent(sessionId)}`;
 }
 
 export function newCodexSessionUrl(pullRequest: {

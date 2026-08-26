@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   codexSessionId,
   codexSessionMatches,
+  codexSessionUrl,
   githubRepository,
   newCodexSessionUrl,
   singleActiveCodexSession,
@@ -16,6 +17,10 @@ describe("Codex links", () => {
     expect(codexSessionId("codex://threads/new")).toBeUndefined();
   });
 
+  test("opens an existing task inside MergeTray", () => {
+    expect(codexSessionUrl(sessionId)).toBe(`/codex?thread=${sessionId}`);
+  });
+
   test("builds a new task link with repository and PR context", () => {
     const link = new URL(
       newCodexSessionUrl({
@@ -27,6 +32,7 @@ describe("Codex links", () => {
       }),
     );
 
+    expect(link.protocol).toBe("codex:");
     expect(link.hostname).toBe("threads");
     expect(link.pathname).toBe("/new");
     expect(link.searchParams.get("originUrl")).toBe(

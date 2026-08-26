@@ -119,11 +119,15 @@ and signing in with `codex`.
 
 When enabled, the `codex` binary must be available on your local
 `PATH`. MergeTray uses the experimental
-[Codex app-server](https://learn.chatgpt.com/docs/app-server) protocol to read
-local active and archived task metadata. Task scans are loaded when the Codex
-section is opened and briefly cached.
+[Codex app-server](https://learn.chatgpt.com/docs/app-server) protocol to power
+the embedded conversation and discover local active and archived tasks. Task
+scans are loaded when the Codex section is opened and briefly cached.
 Run `pnpm mergetray doctor` to check whether the CLI is available and whether
 the integration is enabled.
+
+The `/codex` page can start or resume a local Codex task, stream replies and
+tool activity, surface approval requests, and show the current turn's diff.
+Turns start in a read-only sandbox and require approval before changing files.
 
 ## Optional webhook refreshes
 

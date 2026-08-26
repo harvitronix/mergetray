@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Bot,
   ChevronDown,
   GitMerge,
   GitPullRequest,
@@ -51,10 +52,12 @@ function CountBadge({
 }
 
 export function AppNav({
+  codexEnabled,
   counts,
   collapsed,
   repositories,
 }: {
+  codexEnabled: boolean;
   counts: Counts;
   collapsed: boolean;
   repositories: Repository[];
@@ -63,6 +66,7 @@ export function AppNav({
   const searchParams = useSearchParams();
   const selectedRepositoryId = searchParams.get("repo");
   const isSettings = pathname.startsWith("/settings");
+  const isCodex = pathname.startsWith("/codex");
   const isRecentlyMerged = pathname.startsWith("/merged");
   const isInbox = pathname === "/" || pathname.startsWith("/inbox");
   const repositoryCounts = new Map(
@@ -106,6 +110,18 @@ export function AppNav({
           <GitMerge className="size-4 shrink-0" />
           <span className={labelClass}>Recently merged</span>
         </Link>
+        {codexEnabled ? (
+          <Link
+            href="/codex"
+            className={`${navClass} ${isCodex ? activeClass : inactiveClass}`}
+            aria-current={isCodex ? "page" : undefined}
+            aria-label="Codex"
+            title={collapsed ? "Codex" : undefined}
+          >
+            <Bot className="size-4 shrink-0" />
+            <span className={labelClass}>Codex</span>
+          </Link>
+        ) : null}
       </div>
       <details key={String(collapsed)} className="group grid gap-1" open>
         <summary
@@ -158,10 +174,12 @@ export function AppNav({
 
 export function AppShell({
   children,
+  codexEnabled,
   counts,
   repositories,
 }: {
   children: ReactNode;
+  codexEnabled: boolean;
   counts: Counts;
   repositories: Repository[];
 }) {
@@ -220,6 +238,7 @@ export function AppShell({
         <Suspense fallback={null}>
           <AppNav
             collapsed={collapsed}
+            codexEnabled={codexEnabled}
             counts={counts}
             repositories={repositories}
           />
