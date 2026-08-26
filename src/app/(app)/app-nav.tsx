@@ -5,10 +5,14 @@ import {
   GitMerge,
   GitPullRequest,
   Inbox,
+  PanelLeftClose,
+  PanelLeftOpen,
   Settings,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
+import { type ReactNode, Suspense, useState } from "react";
 
 const baseClass = "flex min-w-0 items-center gap-2 rounded-md px-2.5 py-2";
 const activeClass = "sidebar-nav-active font-medium";
@@ -28,11 +32,19 @@ type Repository = {
   fullName: string;
 };
 
-function CountBadge({ value }: { value: number }) {
+function CountBadge({
+  value,
+  collapsed,
+}: {
+  value: number;
+  collapsed: boolean;
+}) {
   if (value === 0) return null;
 
   return (
-    <span className="sidebar-count ml-auto rounded-full px-2 py-0.5 text-xs font-medium">
+    <span
+      className={`sidebar-count ml-auto rounded-full px-2 py-0.5 text-xs font-medium ${collapsed ? "lg:hidden" : ""}`}
+    >
       {value}
     </span>
   );
@@ -40,9 +52,11 @@ function CountBadge({ value }: { value: number }) {
 
 export function AppNav({
   counts,
+  collapsed,
   repositories,
 }: {
   counts: Counts;
+  collapsed: boolean;
   repositories: Repository[];
 }) {
   const pathname = usePathname();
@@ -57,33 +71,46 @@ export function AppNav({
       active,
     ]),
   );
+  const navClass = `${baseClass} ${collapsed ? "lg:justify-center lg:px-2" : ""}`;
+  const labelClass = collapsed ? "lg:hidden" : "";
 
   return (
-    <nav className="mt-6 flex flex-1 flex-col gap-5 text-sm">
+    <nav
+      id="app-sidebar-nav"
+      className="mt-6 flex flex-1 flex-col gap-5 text-sm"
+    >
       <div className="grid gap-1">
-        <p className="mb-1 px-2.5 text-[0.68rem] font-semibold uppercase tracking-wide text-[color:var(--sidebar-muted)]">
+        <p
+          className={`mb-1 px-2.5 text-[0.68rem] font-semibold uppercase tracking-wide text-[color:var(--sidebar-muted)] ${labelClass}`}
+        >
           Workspace
         </p>
         <Link
           href="/inbox"
-          className={`${baseClass} ${isInbox && !selectedRepositoryId ? activeClass : inactiveClass}`}
+          className={`${navClass} ${isInbox && !selectedRepositoryId ? activeClass : inactiveClass}`}
           aria-current={isInbox && !selectedRepositoryId ? "page" : undefined}
+          aria-label="Inbox"
+          title={collapsed ? "Inbox" : undefined}
         >
-          <Inbox className="size-4" />
-          Inbox
-          <CountBadge value={counts.all} />
+          <Inbox className="size-4 shrink-0" />
+          <span className={labelClass}>Inbox</span>
+          <CountBadge value={counts.all} collapsed={collapsed} />
         </Link>
         <Link
           href="/merged"
-          className={`${baseClass} ${isRecentlyMerged ? activeClass : inactiveClass}`}
+          className={`${navClass} ${isRecentlyMerged ? activeClass : inactiveClass}`}
           aria-current={isRecentlyMerged ? "page" : undefined}
+          aria-label="Recently merged"
+          title={collapsed ? "Recently merged" : undefined}
         >
-          <GitMerge className="size-4" />
-          Recently merged
+          <GitMerge className="size-4 shrink-0" />
+          <span className={labelClass}>Recently merged</span>
         </Link>
       </div>
-      <details className="group grid gap-1" open>
-        <summary className="flex cursor-pointer list-none items-center gap-2 px-2.5 text-[0.68rem] font-semibold uppercase tracking-wide text-[color:var(--sidebar-muted)]">
+      <details key={String(collapsed)} className="group grid gap-1" open>
+        <summary
+          className={`flex cursor-pointer list-none items-center gap-2 px-2.5 text-[0.68rem] font-semibold uppercase tracking-wide text-[color:var(--sidebar-muted)] ${labelClass}`}
+        >
           Repositories
           <ChevronDown className="ml-auto size-3 transition group-open:rotate-180" />
         </summary>
@@ -95,15 +122,19 @@ export function AppNav({
               <Link
                 key={repository.id}
                 href={`/inbox?repo=${repository.id}`}
-                className={`${baseClass} ${isActive ? activeClass : inactiveClass}`}
+                className={`${navClass} ${isActive ? activeClass : inactiveClass}`}
                 aria-current={isActive ? "page" : undefined}
+                aria-label={repository.fullName}
                 title={repository.fullName}
               >
                 <GitPullRequest className="size-3.5 shrink-0" />
-                <span className="block min-w-0 truncate">
+                <span className={`block min-w-0 truncate ${labelClass}`}>
                   {repository.name}
                 </span>
-                <CountBadge value={repositoryCounts.get(repository.id) ?? 0} />
+                <CountBadge
+                  value={repositoryCounts.get(repository.id) ?? 0}
+                  collapsed={collapsed}
+                />
               </Link>
             );
           })}
@@ -112,13 +143,89 @@ export function AppNav({
       <div className="sidebar-divider mt-auto grid gap-1 border-t pt-3">
         <Link
           href="/settings"
-          className={`${baseClass} ${isSettings ? activeClass : inactiveClass}`}
+          className={`${navClass} ${isSettings ? activeClass : inactiveClass}`}
           aria-current={isSettings ? "page" : undefined}
+          aria-label="Settings"
+          title={collapsed ? "Settings" : undefined}
         >
-          <Settings className="size-4" />
-          Settings
+          <Settings className="size-4 shrink-0" />
+          <span className={labelClass}>Settings</span>
         </Link>
       </div>
     </nav>
+  );
+}
+
+export function AppShell({
+  children,
+  counts,
+  repositories,
+}: {
+  children: ReactNode;
+  counts: Counts;
+  repositories: Repository[];
+}) {
+  const [collapsed, setCollapsed] = useState(false);
+
+  return (
+    <div
+      className={`grid min-h-screen grid-cols-1 transition-[grid-template-columns] duration-200 ${collapsed ? "lg:grid-cols-[72px_1fr]" : "lg:grid-cols-[256px_1fr]"}`}
+    >
+      <aside
+        className={`app-sidebar flex flex-col border-b px-4 py-4 transition-[padding] duration-200 lg:sticky lg:top-0 lg:h-screen lg:self-start lg:overflow-y-auto lg:border-r lg:border-b-0 ${collapsed ? "lg:px-3" : ""}`}
+      >
+        <div
+          className={`flex items-center gap-3 ${collapsed ? "lg:justify-center" : ""}`}
+        >
+          <div
+            className={`sidebar-logo grid size-9 shrink-0 place-items-center rounded-lg ${collapsed ? "lg:hidden" : ""}`}
+          >
+            <Image
+              src="/mergetray-mark-paw.png"
+              alt=""
+              width={512}
+              height={512}
+              aria-hidden="true"
+              className="size-8"
+              priority
+              unoptimized
+            />
+          </div>
+          <div
+            className={`min-w-0 leading-tight ${collapsed ? "lg:hidden" : ""}`}
+          >
+            <p className="truncate text-sm font-semibold text-[color:var(--sidebar-fg)]">
+              MergeTray
+            </p>
+            <p className="truncate text-xs text-[color:var(--sidebar-muted)]">
+              GitHub review queue
+            </p>
+          </div>
+          <button
+            type="button"
+            className={`sidebar-control ml-auto hidden size-9 shrink-0 place-items-center rounded-lg lg:grid ${collapsed ? "lg:ml-0" : ""}`}
+            aria-controls="app-sidebar-nav"
+            aria-expanded={!collapsed}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            onClick={() => setCollapsed((value) => !value)}
+          >
+            {collapsed ? (
+              <PanelLeftOpen className="size-4" />
+            ) : (
+              <PanelLeftClose className="size-4" />
+            )}
+          </button>
+        </div>
+        <Suspense fallback={null}>
+          <AppNav
+            collapsed={collapsed}
+            counts={counts}
+            repositories={repositories}
+          />
+        </Suspense>
+      </aside>
+      <section className="min-w-0 bg-[var(--app-bg)]">{children}</section>
+    </div>
   );
 }
