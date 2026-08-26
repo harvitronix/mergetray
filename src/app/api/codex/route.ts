@@ -298,13 +298,17 @@ export async function POST(request: Request) {
           const result = activeThreadId
             ? await codexAppServer.request<{ thread: CodexThread }>(
                 "thread/resume",
-                { threadId: activeThreadId },
+                {
+                  threadId: activeThreadId,
+                  approvalsReviewer: "auto_review",
+                },
               )
             : await codexAppServer.request<{ thread: CodexThread }>(
                 "thread/start",
                 {
                   cwd,
                   approvalPolicy: "on-request",
+                  approvalsReviewer: "auto_review",
                   sandbox: "read-only",
                   serviceName: "mergetray",
                 },
@@ -331,6 +335,7 @@ export async function POST(request: Request) {
               input: [{ type: "text", text: prompt, text_elements: [] }],
               cwd: result.thread.cwd,
               approvalPolicy: "on-request",
+              approvalsReviewer: "auto_review",
               sandboxPolicy: { type: "readOnly", networkAccess: false },
             },
           );
