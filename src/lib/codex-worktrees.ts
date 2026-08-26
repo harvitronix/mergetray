@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdir } from "node:fs/promises";
+import { lstat, mkdir, realpath } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { type CodexThread, codexAppServer } from "./codex-app-server";
@@ -47,11 +47,61 @@ export type CodexTaskSetupStage =
   | "startingTask"
   | "linkingTask";
 
+export type CodexManagedWorktree = {
+  id: string;
+  repository: string;
+  number: number;
+  title: string;
+  url: string;
+  pullRequestState: string;
+  sessionId: string;
+  path: string;
+  branch: string;
+  sha: string;
+  createdAt: number;
+  cleanupState:
+    | "ready"
+    | "active"
+    | "dirty"
+    | "missing"
+    | "unregistered"
+    | "unavailable";
+  detail: string;
+  canCleanup: boolean;
+};
+
+type ManagedWorktreeRow = {
+  id: number;
+  inbox_item_id: number;
+  full_name: string;
+  number: number;
+  title: string;
+  url: string;
+  state: string;
+  session_id: string;
+  current_session_id: string | null;
+  path: string;
+  head_ref: string;
+  head_sha: string;
+  created_at: number;
+  archived_at: number | null;
+};
+
+type WorktreeCheckout =
+  | { state: "missing" }
+  | { state: "unregistered"; detail: string }
+  | { state: "dirty" }
+  | { state: "ready"; repositoryRoot: string; worktreePath: string };
+
 async function git(cwd: string, ...args: string[]) {
   const { stdout } = await execFileAsync("git", ["-C", cwd, ...args], {
     timeout: 60_000,
   });
   return stdout.trim();
+}
+
+function managedWorktreeRoot() {
+  return path.join(path.dirname(mergetrayDatabasePath()), "worktrees");
 }
 
 async function localRepository(cwd: string, expectedRepository: string) {
@@ -258,10 +308,7 @@ async function createDetachedWorktree(
   repository: LocalRepository,
   context: RecoveryContext,
 ) {
-  const worktreeRoot = path.join(
-    path.dirname(mergetrayDatabasePath()),
-    "worktrees",
-  );
+  const worktreeRoot = managedWorktreeRoot();
   const worktreePath = path.join(
     worktreeRoot,
     `${context.full_name.replaceAll("/", "-")}-pr-${context.number}-${context.head_sha.slice(0, 7)}-${Date.now()}`,
@@ -388,4 +435,260 @@ export async function recoverCodexThread(thread: CodexThread) {
   recordWorktree(context, thread.id, fork.thread.id, worktreePath);
 
   return { threadId: fork.thread.id };
+}
+
+function managedWorktreeRows() {
+  return getDatabase()
+    .prepare(
+      `SELECT codex_worktrees.id, codex_worktrees.inbox_item_id,
+              repositories.full_name, inbox_items.number,
+              inbox_items.title, inbox_items.url, inbox_items.state,
+              codex_worktrees.session_id, agent_session_links.session_id AS current_session_id,
+              codex_worktrees.path, codex_worktrees.head_ref,
+              codex_worktrees.head_sha, codex_worktrees.created_at,
+              codex_worktrees.archived_at
+       FROM codex_worktrees
+       JOIN inbox_items ON inbox_items.id = codex_worktrees.inbox_item_id
+       JOIN repositories ON repositories.id = inbox_items.repository_id
+       LEFT JOIN agent_session_links
+         ON agent_session_links.inbox_item_id = inbox_items.id
+        AND agent_session_links.provider = 'codex'
+       WHERE codex_worktrees.removed_at IS NULL
+       ORDER BY codex_worktrees.created_at DESC`,
+    )
+    .all() as ManagedWorktreeRow[];
+}
+
+async function inspectManagedWorktree(
+  worktreePath: string,
+): Promise<WorktreeCheckout> {
+  const root = path.resolve(managedWorktreeRoot());
+  const resolvedPath = path.resolve(worktreePath);
+  if (path.dirname(resolvedPath) !== root) {
+    return {
+      state: "unregistered",
+      detail: "The recorded path is outside MergeTray's managed directory.",
+    };
+  }
+
+  let stats: Awaited<ReturnType<typeof lstat>>;
+  try {
+    stats = await lstat(resolvedPath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return { state: "missing" };
+    }
+    throw error;
+  }
+  if (!stats.isDirectory() || stats.isSymbolicLink()) {
+    return {
+      state: "unregistered",
+      detail: "The recorded path is not a regular directory.",
+    };
+  }
+
+  const [realRoot, realWorktree] = await Promise.all([
+    realpath(root),
+    realpath(resolvedPath),
+  ]);
+  if (path.dirname(realWorktree) !== realRoot) {
+    return {
+      state: "unregistered",
+      detail:
+        "The recorded path does not resolve inside the managed directory.",
+    };
+  }
+
+  try {
+    const [checkoutRoot, worktrees, changes, commonDir] = await Promise.all([
+      git(realWorktree, "rev-parse", "--show-toplevel"),
+      git(realWorktree, "worktree", "list", "--porcelain"),
+      git(realWorktree, "status", "--porcelain", "--untracked-files=all"),
+      git(
+        realWorktree,
+        "rev-parse",
+        "--path-format=absolute",
+        "--git-common-dir",
+      ),
+    ]);
+    if (
+      path.resolve(checkoutRoot) !== realWorktree ||
+      !worktrees.split("\n").some((line) => line === `worktree ${realWorktree}`)
+    ) {
+      return {
+        state: "unregistered",
+        detail: "Git no longer recognizes this directory as that worktree.",
+      };
+    }
+    if (changes) return { state: "dirty" };
+    return {
+      state: "ready",
+      repositoryRoot: path.dirname(commonDir),
+      worktreePath: realWorktree,
+    };
+  } catch {
+    return {
+      state: "unregistered",
+      detail: "Git could not inspect this managed worktree.",
+    };
+  }
+}
+
+async function readManagedThread(sessionId: string) {
+  return codexAppServer.request<{ thread: CodexThread }>("thread/read", {
+    threadId: sessionId,
+    includeTurns: false,
+  });
+}
+
+export async function listCodexManagedWorktrees(): Promise<
+  CodexManagedWorktree[]
+> {
+  return Promise.all(
+    managedWorktreeRows().map(async (row) => {
+      const [checkout, task] = await Promise.all([
+        inspectManagedWorktree(row.path),
+        readManagedThread(row.session_id).catch(() => undefined),
+      ]);
+      const base = {
+        id: String(row.id),
+        repository: row.full_name,
+        number: row.number,
+        title: row.title,
+        url: row.url,
+        pullRequestState: row.state,
+        sessionId: row.session_id,
+        path: row.path,
+        branch: row.head_ref,
+        sha: row.head_sha,
+        createdAt: row.created_at,
+      };
+
+      if (task?.thread.status?.type === "active") {
+        return {
+          ...base,
+          cleanupState: "active" as const,
+          detail: "The Codex task is currently active.",
+          canCleanup: false,
+        };
+      }
+      if (checkout.state === "dirty") {
+        return {
+          ...base,
+          cleanupState: "dirty" as const,
+          detail: "This worktree has uncommitted changes.",
+          canCleanup: false,
+        };
+      }
+      if (checkout.state === "unregistered") {
+        return {
+          ...base,
+          cleanupState: "unregistered" as const,
+          detail: checkout.detail,
+          canCleanup: false,
+        };
+      }
+      if (!task && !row.archived_at) {
+        return {
+          ...base,
+          cleanupState: "unavailable" as const,
+          detail: "The Codex task could not be inspected.",
+          canCleanup: false,
+        };
+      }
+      if (checkout.state === "missing") {
+        return {
+          ...base,
+          cleanupState: "missing" as const,
+          detail:
+            "The directory is already missing; its task can be archived and the record cleared.",
+          canCleanup: true,
+        };
+      }
+      return {
+        ...base,
+        cleanupState: "ready" as const,
+        detail:
+          row.current_session_id === row.session_id
+            ? "The worktree is clean and still linked to this pull request."
+            : "The worktree is clean and has been superseded by another task.",
+        canCleanup: true,
+      };
+    }),
+  );
+}
+
+async function codexThreadIsArchived(sessionId: string) {
+  const result = await codexAppServer.request<{ data: CodexThread[] }>(
+    "thread/list",
+    {
+      limit: 20,
+      archived: true,
+      searchTerm: sessionId,
+      useStateDbOnly: true,
+    },
+  );
+  return result.data.some((thread) => thread.id === sessionId);
+}
+
+export async function cleanupCodexManagedWorktree(id: string) {
+  const row = managedWorktreeRows().find((item) => String(item.id) === id);
+  if (!row) throw new Error("Managed worktree not found.");
+
+  const checkout = await inspectManagedWorktree(row.path);
+  if (checkout.state === "dirty") {
+    throw new Error("Commit or discard the worktree's changes before cleanup.");
+  }
+  if (checkout.state === "unregistered") throw new Error(checkout.detail);
+
+  let archived = Boolean(row.archived_at);
+  let task: { thread: CodexThread } | undefined;
+  try {
+    task = await readManagedThread(row.session_id);
+  } catch {
+    if (!archived) archived = await codexThreadIsArchived(row.session_id);
+    if (!archived) throw new Error("The Codex task could not be inspected.");
+  }
+  if (task?.thread.status?.type === "active") {
+    throw new Error("Wait for the Codex task to finish before cleanup.");
+  }
+
+  if (!archived) archived = await codexThreadIsArchived(row.session_id);
+  if (!archived) {
+    await codexAppServer.request("thread/archive", {
+      threadId: row.session_id,
+    });
+  }
+  if (!row.archived_at) {
+    getDatabase()
+      .prepare("UPDATE codex_worktrees SET archived_at = ? WHERE id = ?")
+      .run(Date.now(), row.id);
+  }
+
+  if (checkout.state === "ready") {
+    await git(
+      checkout.repositoryRoot,
+      "worktree",
+      "remove",
+      checkout.worktreePath,
+    );
+    await git(checkout.repositoryRoot, "worktree", "prune");
+  }
+
+  const db = getDatabase();
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.prepare("UPDATE codex_worktrees SET removed_at = ? WHERE id = ?").run(
+      Date.now(),
+      row.id,
+    );
+    db.prepare(
+      `DELETE FROM agent_session_links
+       WHERE inbox_item_id = ? AND provider = 'codex' AND session_id = ?`,
+    ).run(row.inbox_item_id, row.session_id);
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
 }

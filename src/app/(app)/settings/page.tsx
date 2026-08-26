@@ -1,4 +1,10 @@
-import { Bot, GitBranch, Terminal } from "lucide-react";
+import {
+  Bot,
+  ExternalLink,
+  GitBranch,
+  HardDrive,
+  Terminal,
+} from "lucide-react";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -8,12 +14,17 @@ import {
   codexIntegrationEnabled,
   codexIntegrationSetting,
 } from "@/lib/codex-integration";
-import { setRepositoryLocalPath } from "@/lib/codex-worktrees";
+import {
+  cleanupCodexManagedWorktree,
+  listCodexManagedWorktrees,
+  setRepositoryLocalPath,
+} from "@/lib/codex-worktrees";
 import { setSetting, setting } from "@/lib/database";
 import { githubAuthStatus } from "@/lib/github-auth";
 import { githubSyncState, syncGithub } from "@/lib/github-sync";
 import { githubIdentityConfigured, listRepositories } from "@/lib/inbox-store";
 import { appTheme, themeCookieName } from "@/lib/theme";
+import { CleanupWorktreeButton } from "./cleanup-worktree-button";
 import { SectionRulesSettings } from "./section-rules-settings";
 import { SyncButton } from "./sync-button";
 import { ThemeSettingsForm } from "./theme-settings-form";
@@ -27,6 +38,8 @@ export default async function SettingsPage({
     codexUpdated?: string;
     repositoryPathUpdated?: string;
     repositoryPathError?: string;
+    worktreeCleaned?: string;
+    worktreeCleanupError?: string;
   }>;
 }) {
   const query = await searchParams;
@@ -37,6 +50,7 @@ export default async function SettingsPage({
     codexCliVersion(),
   ]);
   const codexEnabled = codexIntegrationEnabled();
+  const managedWorktrees = await listCodexManagedWorktrees();
   const syncState = githubSyncState();
 
   async function syncNow() {
@@ -81,6 +95,24 @@ export default async function SettingsPage({
     }
     revalidatePath("/", "layout");
     redirect("/settings?repositoryPathUpdated=1");
+  }
+
+  async function cleanupWorktree(formData: FormData) {
+    "use server";
+
+    try {
+      await cleanupCodexManagedWorktree(
+        String(formData.get("worktreeId") ?? ""),
+      );
+    } catch (cleanupError) {
+      const message =
+        cleanupError instanceof Error
+          ? cleanupError.message
+          : "The managed worktree could not be cleaned up.";
+      redirect(`/settings?worktreeCleanupError=${encodeURIComponent(message)}`);
+    }
+    revalidatePath("/", "layout");
+    redirect("/settings?worktreeCleaned=1");
   }
 
   return (
@@ -131,6 +163,16 @@ export default async function SettingsPage({
         {query.repositoryPathError ? (
           <Notice tone="danger" className="mt-5">
             {query.repositoryPathError}
+          </Notice>
+        ) : null}
+        {query.worktreeCleaned ? (
+          <Notice tone="success" className="mt-5">
+            The Codex task was archived and its managed worktree was removed.
+          </Notice>
+        ) : null}
+        {query.worktreeCleanupError ? (
+          <Notice tone="danger" className="mt-5">
+            {query.worktreeCleanupError}
           </Notice>
         ) : null}
 
@@ -205,6 +247,86 @@ export default async function SettingsPage({
             </div>
           </div>
         ) : null}
+
+        <div className="mt-5 border-t border-foreground/10 pt-5">
+          <div className="flex items-center gap-2">
+            <HardDrive className="size-4" />
+            <h3 className="text-sm font-semibold">Managed worktrees</h3>
+            <span className="text-xs text-foreground/45">
+              {managedWorktrees.length}
+            </span>
+          </div>
+          <p className="mt-1 text-sm text-foreground/55">
+            MergeTray only removes clean worktrees that it created. Active,
+            dirty, or unrecognized directories remain untouched.
+          </p>
+          {managedWorktrees.length ? (
+            <div className="mt-3 grid gap-3">
+              {managedWorktrees.map((worktree) => (
+                <Surface
+                  key={worktree.id}
+                  variant="inset"
+                  className="min-w-0 px-3 py-3"
+                >
+                  <div className="flex min-w-0 flex-wrap items-start gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <a
+                          href={worktree.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex min-w-0 items-center gap-1 text-sm font-semibold"
+                        >
+                          <span className="truncate">
+                            {worktree.repository}#{worktree.number}
+                          </span>
+                          <ExternalLink className="size-3 shrink-0" />
+                        </a>
+                        <span className="rounded-full border border-foreground/10 px-2 py-0.5 text-[0.68rem] font-medium uppercase tracking-wide text-foreground/55">
+                          {worktree.cleanupState === "ready"
+                            ? "Clean"
+                            : worktree.cleanupState === "active"
+                              ? "Task active"
+                              : worktree.cleanupState === "dirty"
+                                ? "Uncommitted changes"
+                                : worktree.cleanupState === "missing"
+                                  ? "Directory missing"
+                                  : "Needs attention"}
+                        </span>
+                      </div>
+                      <p className="mt-1 truncate text-sm text-foreground/60">
+                        {worktree.title}
+                      </p>
+                      <p className="mt-1 break-all font-mono text-xs text-foreground/45">
+                        {worktree.path}
+                      </p>
+                      <p className="mt-1 text-xs text-foreground/45">
+                        {worktree.branch} @ {worktree.sha.slice(0, 7)} ·{" "}
+                        {worktree.pullRequestState} · created{" "}
+                        {new Date(worktree.createdAt).toLocaleString()}
+                      </p>
+                      <p className="mt-2 text-xs text-foreground/60">
+                        {worktree.detail}
+                      </p>
+                    </div>
+                    <form action={cleanupWorktree}>
+                      <input
+                        type="hidden"
+                        name="worktreeId"
+                        value={worktree.id}
+                      />
+                      <CleanupWorktreeButton disabled={!worktree.canCleanup} />
+                    </form>
+                  </div>
+                </Surface>
+              ))}
+            </div>
+          ) : (
+            <p className="app-inset-surface mt-3 px-3 py-3 text-sm text-foreground/50">
+              No managed Codex worktrees.
+            </p>
+          )}
+        </div>
       </Surface>
 
       <Surface className="mt-4 p-5">

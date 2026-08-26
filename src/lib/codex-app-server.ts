@@ -46,6 +46,10 @@ export type CodexThread = {
     branch: string | null;
     originUrl: string | null;
   } | null;
+  status?: {
+    type: "notLoaded" | "idle" | "systemError" | "active";
+    activeFlags?: string[];
+  };
   turns: Array<{ items: CodexThreadItem[] }>;
 };
 
