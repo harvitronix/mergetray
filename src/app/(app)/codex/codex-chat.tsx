@@ -304,6 +304,7 @@ export function CodexChat({
   const [setupStage, setSetupStage] = useState<SetupStage>();
   const [turnId, setTurnId] = useState<string>();
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [isActivityOpen, setIsActivityOpen] = useState(true);
   const [approval, setApproval] = useState<Approval>();
   const [diff, setDiff] = useState("");
   const [error, setError] = useState<string | undefined>(initialError);
@@ -691,8 +692,8 @@ export function CodexChat({
     !isRecovering;
 
   return (
-    <div className="grid h-full min-h-0 gap-4 overflow-x-hidden overflow-y-auto xl:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.65fr)] xl:overflow-hidden">
-      <Surface className="flex min-h-[36rem] min-w-0 flex-col overflow-hidden xl:min-h-0">
+    <div className="flex h-full min-h-0 flex-col gap-4 overflow-x-hidden overflow-y-auto xl:grid xl:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.65fr)] xl:overflow-hidden">
+      <Surface className="flex min-h-[36rem] min-w-0 shrink-0 flex-col overflow-hidden xl:min-h-0">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-foreground/10 px-4 py-3">
           <div className="min-w-0">
             <p className="text-sm font-semibold">Codex</p>
@@ -900,7 +901,7 @@ export function CodexChat({
         </AssistantRuntimeProvider>
       </Surface>
 
-      <div className="grid min-w-0 max-w-full content-start gap-4 overflow-x-hidden xl:h-full xl:min-h-0 xl:overflow-y-auto">
+      <div className="grid min-w-0 max-w-full shrink-0 content-start gap-4 overflow-x-hidden xl:h-full xl:min-h-0 xl:overflow-y-auto">
         {approval ? (
           <Surface className="min-w-0 max-w-full overflow-hidden border-amber-500/35 p-4">
             <div className="flex min-w-0 items-start gap-3">
@@ -914,7 +915,7 @@ export function CodexChat({
                       : "Codex wants to run a command outside the sandbox.")}
                 </p>
                 {approval.command ? (
-                  <code className="mt-3 block max-w-full whitespace-pre-wrap break-all rounded-md bg-background p-2 text-xs">
+                  <code className="mt-3 block max-h-64 max-w-full overflow-y-auto whitespace-pre-wrap break-all rounded-md bg-background p-2 text-xs">
                     {approval.command}
                   </code>
                 ) : null}
@@ -949,17 +950,29 @@ export function CodexChat({
         ) : null}
 
         <Surface className="min-w-0 max-w-full overflow-hidden p-4">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="flex items-center gap-2 text-sm font-semibold">
-              <Terminal className="size-4" />
-              Activity
-            </h2>
-            {isRunning ? (
-              <LoaderCircle className="size-4 animate-spin text-foreground/45" />
-            ) : null}
-          </div>
-          {activities.length ? (
-            <div className="mt-3 grid min-w-0 gap-2">
+          <h2>
+            <button
+              type="button"
+              aria-expanded={isActivityOpen}
+              onClick={() => setIsActivityOpen((open) => !open)}
+              className="flex w-full items-center justify-between gap-3 text-sm font-semibold"
+            >
+              <span className="flex items-center gap-2">
+                <Terminal className="size-4" />
+                Activity
+              </span>
+              <span className="flex items-center gap-2">
+                {isRunning ? (
+                  <LoaderCircle className="size-4 animate-spin text-foreground/45" />
+                ) : null}
+                <ChevronRight
+                  className={`size-4 text-foreground/45 transition ${isActivityOpen ? "rotate-90" : ""}`}
+                />
+              </span>
+            </button>
+          </h2>
+          {isActivityOpen && activities.length ? (
+            <div className="mt-3 grid max-h-80 min-w-0 gap-2 overflow-y-auto pr-1">
               {activities.map((item) => (
                 <Surface
                   key={item.id}
@@ -989,11 +1002,11 @@ export function CodexChat({
                 </Surface>
               ))}
             </div>
-          ) : (
+          ) : isActivityOpen ? (
             <p className="mt-3 text-sm text-foreground/45">
               Commands and file changes will appear here.
             </p>
-          )}
+          ) : null}
         </Surface>
 
         <Surface className="min-w-0 max-w-full overflow-hidden p-4">
