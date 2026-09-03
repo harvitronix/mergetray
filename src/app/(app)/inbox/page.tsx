@@ -40,12 +40,6 @@ export default async function InboxPage({
   const selectedRepository = repositoryId
     ? repositories.find((repository) => repository.id === repositoryId)
     : undefined;
-  const inboxStateKey = inbox
-    .map(
-      (row) =>
-        `${row.item.id}:${row.userState?.status ?? "active"}:${row.userState?.snoozedUntil ?? ""}:${row.userState?.note ?? ""}`,
-    )
-    .join("|");
 
   async function updateStatus(formData: FormData) {
     "use server";
@@ -107,7 +101,7 @@ export default async function InboxPage({
   return (
     <AppPage>
       <InboxTable
-        key={`${layout}-${view}-${repositoryId ?? "all"}-${selectedAuthor ?? "all"}-${inboxStateKey}`}
+        key={`${layout}-${view}-${repositoryId ?? "all"}-${selectedAuthor ?? "all"}`}
         rows={inbox}
         view={view}
         initialLayout={layout}

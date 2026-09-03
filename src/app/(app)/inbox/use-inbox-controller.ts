@@ -38,8 +38,6 @@ export function useInboxController({
   const [actionError, setActionError] = useState<string | null>(null);
 
   const refreshNow = useCallback(() => {
-    setOpenSnoozeRow(null);
-    setOpenNoteRow(null);
     router.refresh();
   }, [router]);
 
@@ -79,10 +77,12 @@ export function useInboxController({
     formData: FormData,
     onFailure?: () => void,
   ) {
+    const inboxItemIds = formData.getAll("inboxItemId").map(String);
     setActionError(null);
     startTransition(async () => {
       try {
         await action(formData);
+        restoreRows(inboxItemIds);
       } catch {
         onFailure?.();
         setActionError(actionErrorMessage);
