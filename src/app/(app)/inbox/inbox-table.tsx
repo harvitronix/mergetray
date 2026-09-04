@@ -134,6 +134,7 @@ export function InboxTable({
     toggleSelectionMode,
     toggleSnooze,
   } = useInboxController({
+    rows,
     updateStatus,
     snoozeItem,
     promoteToShipIt,
