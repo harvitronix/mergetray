@@ -13,11 +13,13 @@ type InboxItemId = InboxRow["item"]["id"];
 type InboxAction = (formData: FormData) => void | Promise<void>;
 
 export function useInboxController({
+  rows,
   updateStatus,
   snoozeItem,
   promoteToShipIt,
   setUserNote,
 }: {
+  rows: InboxRow[];
   updateStatus: InboxAction;
   snoozeItem: InboxAction;
   promoteToShipIt: InboxAction;
@@ -29,6 +31,7 @@ export function useInboxController({
     Record<string, "done" | "snooze">
   >({});
   const [hiddenRows, setHiddenRows] = useState<Record<string, boolean>>({});
+  const [previousRows, setPreviousRows] = useState(rows);
   const [selectedRowIds, setSelectedRowIds] = useState<Set<InboxItemId>>(
     () => new Set(),
   );
@@ -72,21 +75,33 @@ export function useInboxController({
     });
   }
 
+  // Clear optimistic hiding with the new data, never ahead of it.
+  if (rows !== previousRows) {
+    setPreviousRows(rows);
+    const updatedIds = Object.keys(hiddenRows).filter((id) => {
+      const previous = previousRows.find((row) => row.item.id === id);
+      const current = rows.find((row) => row.item.id === id);
+      return (
+        !current ||
+        current.userState?.status !== previous?.userState?.status ||
+        current.userState?.snoozedUntil !== previous?.userState?.snoozedUntil
+      );
+    });
+    if (updatedIds.length) restoreRows(updatedIds);
+  }
+
   function invokeAction(
     action: InboxAction,
     formData: FormData,
     onFailure?: () => void,
   ) {
-    const inboxItemIds = formData.getAll("inboxItemId").map(String);
     setActionError(null);
     startTransition(async () => {
       try {
         await action(formData);
-        restoreRows(inboxItemIds);
       } catch {
         onFailure?.();
         setActionError(actionErrorMessage);
-      } finally {
         refreshNow();
       }
     });
