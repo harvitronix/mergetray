@@ -28,6 +28,7 @@ import { InboxZeroState } from "./inbox-zero-state";
 import { PrPreviewDrawer } from "./pr-preview-drawer";
 import { useInboxController } from "./use-inbox-controller";
 
+const mineAuthorFilter = "is:mine";
 const notMineAuthorFilter = "not:mine";
 
 type SectionView = "active" | "done";
@@ -85,11 +86,12 @@ export function InboxTable({
     new Set(rows.map((row) => row.item.authorLogin)),
   ).sort((a, b) => a.localeCompare(b));
   const filteredRows = selectedAuthor
-    ? rows.filter((row) =>
-        selectedAuthor === notMineAuthorFilter
-          ? !row.isAuthoredByViewer
-          : row.item.authorLogin === selectedAuthor,
-      )
+    ? rows.filter((row) => {
+        if (selectedAuthor === mineAuthorFilter) return row.isAuthoredByViewer;
+        if (selectedAuthor === notMineAuthorFilter)
+          return !row.isAuthoredByViewer;
+        return row.item.authorLogin === selectedAuthor;
+      })
     : rows;
   const [sectionViews, setSectionViews] = useState<
     Record<InboxGroupId, SectionView>
@@ -272,6 +274,7 @@ export function InboxTable({
             onChange={(event) => replaceAuthorFilter(event.currentTarget.value)}
           >
             <option value="">All</option>
+            <option value={mineAuthorFilter}>Mine</option>
             <option value={notMineAuthorFilter}>Not mine</option>
             {authors.map((author) => (
               <option key={author} value={author}>
