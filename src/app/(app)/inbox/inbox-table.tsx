@@ -93,16 +93,8 @@ export function InboxTable({
         return row.item.authorLogin === selectedAuthor;
       })
     : rows;
-  const [sectionViews, setSectionViews] = useState<
-    Record<InboxGroupId, SectionView>
-  >(
-    () =>
-      Object.fromEntries(
-        inboxSectionDefinitions.map((section) => [section.id, view]),
-      ) as Record<InboxGroupId, SectionView>,
-  );
   const [layout, setLayout] = useState<InboxLayout>(initialLayout);
-  const [listView, setListView] = useState<SectionView>(view);
+  const [inboxView, setInboxView] = useState<SectionView>(view);
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
   const [previewRowId, setPreviewRowId] = useState<InboxItemId | null>(null);
   const timeZone = useSyncExternalStore(
@@ -159,12 +151,12 @@ export function InboxTable({
   }
 
   function replaceAuthorFilter(author: string) {
-    replaceInboxUrl(author, view, layout);
+    replaceInboxUrl(author, inboxView, layout);
   }
 
-  function replaceListView(nextView: SectionView) {
+  function replaceInboxView(nextView: SectionView) {
     clearSelection();
-    setListView(nextView);
+    setInboxView(nextView);
     replaceInboxUrl(selectedAuthor ?? "", nextView, layout);
   }
 
@@ -172,17 +164,13 @@ export function InboxTable({
     // biome-ignore lint/suspicious/noDocumentCookie: Matches the app's existing theme preference pattern.
     document.cookie = `${inboxLayoutCookieName}=${nextLayout}; Path=/; SameSite=Lax`;
     setLayout(nextLayout);
-    replaceInboxUrl(selectedAuthor ?? "", view, nextLayout);
+    replaceInboxUrl(selectedAuthor ?? "", inboxView, nextLayout);
   }
 
   const visibleRows = filteredRows.filter((row) => !hiddenRows[row.item.id]);
   const selectedRows = visibleRows.filter(
     (row) =>
-      selectedRowIds.has(row.item.id) &&
-      !isDone(row) &&
-      (layout === "visual"
-        ? listView === "active"
-        : sectionViews[classifyInboxSection(row, now)] === "active"),
+      selectedRowIds.has(row.item.id) && !isDone(row) && inboxView === "active",
   );
   const openCount = visibleRows.filter((row) => !isDone(row)).length;
   const snoozedCount = filteredRows.filter(
@@ -210,16 +198,11 @@ export function InboxTable({
   );
   const visualRows = groupInboxRows(
     visibleRows.filter((row) =>
-      listView === "done" ? isDone(row) : !isDone(row),
+      inboxView === "done" ? isDone(row) : !isDone(row),
     ),
     now,
   );
   const previewRow = rows.find((row) => row.item.id === previewRowId);
-
-  function replaceSectionView(sectionId: InboxGroupId, nextView: SectionView) {
-    clearSelection();
-    setSectionViews((views) => ({ ...views, [sectionId]: nextView }));
-  }
 
   function toggleTimeline(inboxItemId: InboxItemId) {
     setExpandedRows((rows) => ({
@@ -304,26 +287,24 @@ export function InboxTable({
           </span>
         </div>
         <div className="ml-auto flex flex-wrap items-center gap-2">
-          {layout === "visual" ? (
-            <div className="inline-flex rounded-md border border-foreground/10 bg-background/70 p-0.5 text-xs shadow-sm">
-              <button
-                type="button"
-                className={controlClass(listView === "active")}
-                aria-pressed={listView === "active"}
-                onClick={() => replaceListView("active")}
-              >
-                Active
-              </button>
-              <button
-                type="button"
-                className={controlClass(listView === "done")}
-                aria-pressed={listView === "done"}
-                onClick={() => replaceListView("done")}
-              >
-                Handled
-              </button>
-            </div>
-          ) : null}
+          <div className="inline-flex rounded-md border border-foreground/10 bg-background/70 p-0.5 text-xs shadow-sm">
+            <button
+              type="button"
+              className={controlClass(inboxView === "active")}
+              aria-pressed={inboxView === "active"}
+              onClick={() => replaceInboxView("active")}
+            >
+              Active
+            </button>
+            <button
+              type="button"
+              className={controlClass(inboxView === "done")}
+              aria-pressed={inboxView === "done"}
+              onClick={() => replaceInboxView("done")}
+            >
+              Handled
+            </button>
+          </div>
           <div className="inline-flex rounded-md border border-foreground/10 bg-background/70 p-0.5 text-xs shadow-sm">
             <button
               type="button"
@@ -417,7 +398,7 @@ export function InboxTable({
               key={section.id}
               section={section}
               rows={rowsByGroup[section.id]}
-              groupView={sectionViews[section.id]}
+              groupView={inboxView}
               hiddenRows={hiddenRows}
               expandedRows={expandedRows}
               exitingRows={exitingRows}
@@ -432,7 +413,6 @@ export function InboxTable({
               snoozeItem={snoozeItem}
               promoteToShipIt={promoteToShipIt}
               setUserNote={setUserNote}
-              onViewChange={replaceSectionView}
               onStatusSubmit={animateDoneSubmit}
               onSnoozeSubmit={submitSnooze}
               onShipItSubmit={submitShipItPromotion}
@@ -494,7 +474,7 @@ export function InboxTable({
                           key={row.item.id}
                           row={row}
                           sectionId={sectionId}
-                          groupView={listView}
+                          groupView={inboxView}
                           visuallyIndicated
                           stackPosition={isStack ? stackPosition : undefined}
                           now={now}
@@ -505,7 +485,7 @@ export function InboxTable({
                           selectionEnabled={isSelectionMode}
                           isSelected={selectedRowIds.has(row.item.id)}
                           exitKind={
-                            listView === "active"
+                            inboxView === "active"
                               ? exitingRows[row.item.id]
                               : undefined
                           }
@@ -536,7 +516,7 @@ export function InboxTable({
         )}
         {layout === "visual" && visualRows.length === 0 && rows.length ? (
           <Surface className="px-4 py-10 text-center text-sm text-foreground/50">
-            No {listView === "done" ? "handled" : "active"} items.
+            No {inboxView === "done" ? "handled" : "active"} items.
           </Surface>
         ) : null}
         {rows.length === 0 ? (

@@ -53,7 +53,6 @@ type InboxSectionProps = {
   snoozeItem: (formData: FormData) => void | Promise<void>;
   promoteToShipIt: (formData: FormData) => void | Promise<void>;
   setUserNote: (formData: FormData) => void | Promise<void>;
-  onViewChange: (sectionId: InboxGroupId, view: SectionView) => void;
   onStatusSubmit: (
     event: FormEvent<HTMLFormElement>,
     inboxItemId: InboxItemId,
@@ -91,7 +90,6 @@ export function InboxSection({
   snoozeItem,
   promoteToShipIt,
   setUserNote,
-  onViewChange,
   onStatusSubmit,
   onSnoozeSubmit,
   onShipItSubmit,
@@ -117,12 +115,6 @@ export function InboxSection({
     sectionRows.length > 0 &&
     sectionRows.every((row) => selectedRowIds.has(row.item.id));
   const GroupIcon = sectionIcons[section.id];
-  const controlClass = (selected: boolean) =>
-    `rounded-md px-2.5 py-1 transition ${
-      selected
-        ? "bg-[var(--selected-control-bg)] text-[var(--selected-control-fg)] shadow-sm"
-        : "text-foreground/60"
-    }`;
 
   return (
     <Surface as="section" className="overflow-visible">
@@ -150,22 +142,6 @@ export function InboxSection({
               handled
             </p>
           </div>
-        </div>
-        <div className="inline-flex w-fit rounded-md border border-foreground/10 bg-background/70 p-0.5 text-xs shadow-sm">
-          <button
-            type="button"
-            className={controlClass(groupView === "active")}
-            onClick={() => onViewChange(section.id, "active")}
-          >
-            Active
-          </button>
-          <button
-            type="button"
-            className={controlClass(groupView === "done")}
-            onClick={() => onViewChange(section.id, "done")}
-          >
-            Handled
-          </button>
         </div>
       </div>
       <div className="divide-y divide-foreground/10">
