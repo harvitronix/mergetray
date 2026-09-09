@@ -123,7 +123,7 @@ export function InboxSection({
 
   return (
     <Surface as="section" className="overflow-visible">
-      <div className="inbox-section-header flex flex-col gap-2 rounded-t-lg border-b border-foreground/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="inbox-section-header flex flex-col gap-2 rounded-t-lg border-b border-foreground/10 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-start gap-2">
           {selectionEnabled && groupView === "active" ? (
             <input
@@ -185,7 +185,7 @@ export function InboxSection({
             />
           ))
         ) : (
-          <div className="px-4 py-8 text-sm text-foreground/50">
+          <div className="px-5 py-8 text-sm text-foreground/50">
             No {sectionViewLabel(groupView)} items in this section.
           </div>
         )}

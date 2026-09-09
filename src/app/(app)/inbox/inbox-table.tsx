@@ -464,7 +464,7 @@ export function InboxTable({
                   className="overflow-visible"
                 >
                   {isStack ? (
-                    <div className="inbox-section-header flex items-center justify-between gap-3 border-b border-foreground/10 px-4 py-2.5">
+                    <div className="inbox-section-header flex items-center justify-between gap-3 border-b border-foreground/10 px-5 py-2.5">
                       <div className="flex min-w-0 items-center gap-2">
                         <span className="grid size-7 shrink-0 place-items-center rounded-md bg-foreground/7">
                           <GitPullRequestArrow className="size-3.5" />
