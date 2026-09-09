@@ -159,19 +159,10 @@ function ChecksIcon({ state }: { state: CheckState }) {
 }
 
 function timelineStyle(kind: InboxTimelineItem["kind"]) {
-  if (kind === "approved") {
-    return "pill-success text-[var(--success-text)]";
-  }
   if (kind === "changes_requested") {
     return "pill-danger text-[var(--danger-text)]";
   }
-  if (kind === "opened") {
-    return "pill-info text-sky-700";
-  }
-  if (kind === "commented") {
-    return "pill-info text-blue-700";
-  }
-  return "pill-muted text-foreground/65";
+  return "text-foreground/65";
 }
 
 function TimelineIcon({ kind }: { kind: InboxTimelineItem["kind"] }) {
@@ -552,8 +543,36 @@ export function InboxRowCard({
           </form>
         ) : null}
       </div>
-      <div className="grid min-w-0 gap-3">
-        <div className="flex flex-wrap items-center gap-1.5 lg:justify-end">
+      <div className="flex min-w-0 flex-col justify-between gap-4 self-stretch">
+        <dl
+          aria-label="Pull request status"
+          className="grid grid-cols-2 overflow-hidden rounded-lg border border-foreground/10 bg-background/35"
+        >
+          <div className="min-w-0 border-r border-foreground/10 p-3">
+            <dt className="text-xs font-medium text-foreground/50">Checks</dt>
+            <dd
+              className={`mt-1.5 inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-semibold ring-1 ${checkStyles[state]}`}
+            >
+              <ChecksIcon state={state} />
+              {checksLabel(status, state)}
+            </dd>
+          </div>
+          <div className="min-w-0 p-3">
+            <dt className="text-xs font-medium text-foreground/50">Review</dt>
+            <dd
+              className={`mt-1.5 inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-semibold ring-1 ${review.style}`}
+            >
+              <span className="shrink-0">{review.icon}</span>
+              {review.label}
+            </dd>
+            {review.reviewers ? (
+              <dd className="mt-2 break-words text-xs text-foreground/55">
+                {review.reviewers}
+              </dd>
+            ) : null}
+          </div>
+        </dl>
+        <div className="flex flex-wrap items-center justify-end gap-1.5">
           {codexLink ? (
             <a
               href={codexSessionUrl(codexLink.sessionId)}
@@ -718,34 +737,6 @@ export function InboxRowCard({
             </button>
           </form>
         </div>
-        <dl
-          aria-label="Pull request status"
-          className="grid grid-cols-2 overflow-hidden rounded-lg border border-foreground/10 bg-background/35"
-        >
-          <div className="min-w-0 border-r border-foreground/10 p-3">
-            <dt className="text-xs font-medium text-foreground/50">Checks</dt>
-            <dd
-              className={`mt-1.5 inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-semibold ring-1 ${checkStyles[state]}`}
-            >
-              <ChecksIcon state={state} />
-              {checksLabel(status, state)}
-            </dd>
-          </div>
-          <div className="min-w-0 p-3">
-            <dt className="text-xs font-medium text-foreground/50">Review</dt>
-            <dd
-              className={`mt-1.5 inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-semibold ring-1 ${review.style}`}
-            >
-              <span className="shrink-0">{review.icon}</span>
-              {review.label}
-            </dd>
-            {review.reviewers ? (
-              <dd className="mt-2 break-words text-xs text-foreground/55">
-                {review.reviewers}
-              </dd>
-            ) : null}
-          </div>
-        </dl>
       </div>
     </article>
   );
