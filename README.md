@@ -9,15 +9,24 @@ quickly, across all your repositories, so you can deploy faster.
 
 ![MergeTray inbox with grouped pull requests](docs/mergetray-inbox.png)
 
-## Features
+## Benefits
 
-- Makes tracking many PRs across multiple repos enjoyable (or at least tractable)
-- See what needs your attention quickly, then Handle or Snooze until it's needed again
-- Runs locally and stores its data on your machine
-- No deep integrations - uses your existing CLIs
-- Real-time updates - listens to webhooks (optional) and syncs every 5 minutes (default + fallback)
-- Small Codex (ChatGPT) tie-in - open session threads from MergeTray locally
-- Add post-it notes to each PR to remind yourself what's needed next
+- Know which PRs need attention easily.
+- Keep active, snoozed, and handled PRs separate.
+- Filter PRs by repository, ownership, or author.
+- See dependent PRs together in stacks.
+- See branch, change, check, review, and activity details without opening each
+  PR on GitHub.
+- Add notes to PRs.
+- Apply Ship It, snooze, and done actions to one or several PRs.
+- See the latest 25 merged PRs and filter them by repository.
+- Keep review data and personal workflow state on your machine.
+- Receive GitHub updates every five minutes or through optional webhooks.
+- Use system, light, or dark mode.
+- Start and continue Codex tasks from PRs.
+
+Ship It promotions, snoozes, notes, and handled status are local to MergeTray.
+Normal inbox actions do not change the pull request on GitHub.
 
 ## Why not (some other tool)?
 
@@ -81,9 +90,10 @@ network or put it behind a public reverse proxy.
 
 MergeTray makes outbound requests to GitHub and, when enabled, uses GitHub's
 webhook forwarding service. Pull request metadata, cached GitHub responses,
-notes, settings, and Codex task links are stored in the local SQLite database.
-The database is not encrypted by MergeTray; protect it with your operating
-system account permissions and disk encryption.
+inbox state, notes, settings, Codex task links, and managed worktree records are
+stored in the local SQLite database. The database is not encrypted by
+MergeTray; protect it with your operating system account permissions and disk
+encryption.
 
 MergeTray gets a token from the active `gh` session when making GitHub requests
 but does not save that token in SQLite. GitHub CLI owns credential storage; run

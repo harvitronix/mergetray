@@ -23,7 +23,12 @@ import { groupInboxRows } from "@/lib/inbox-stacks";
 import type { InboxRow } from "@/lib/models";
 import { InboxBulkActions } from "./inbox-bulk-actions";
 import { InboxRowCard } from "./inbox-row-card";
-import { InboxSection, isDone } from "./inbox-section";
+import {
+  InboxSection,
+  inboxRowView,
+  isDone,
+  type SectionView,
+} from "./inbox-section";
 import { InboxZeroState } from "./inbox-zero-state";
 import { PrPreviewDrawer } from "./pr-preview-drawer";
 import { useInboxController } from "./use-inbox-controller";
@@ -31,7 +36,6 @@ import { useInboxController } from "./use-inbox-controller";
 const mineAuthorFilter = "is:mine";
 const notMineAuthorFilter = "not:mine";
 
-type SectionView = "active" | "done";
 type InboxItemId = InboxRow["item"]["id"];
 
 function browserTimeZone() {
@@ -95,6 +99,11 @@ export function InboxTable({
     : rows;
   const [layout, setLayout] = useState<InboxLayout>(initialLayout);
   const [inboxView, setInboxView] = useState<SectionView>(view);
+  const [previousView, setPreviousView] = useState(view);
+  if (view !== previousView) {
+    setPreviousView(view);
+    setInboxView(view);
+  }
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
   const [previewRowId, setPreviewRowId] = useState<InboxItemId | null>(null);
   const timeZone = useSyncExternalStore(
@@ -142,7 +151,7 @@ export function InboxTable({
   ) {
     const params = new URLSearchParams();
     if (selectedRepositoryId) params.set("repo", selectedRepositoryId);
-    if (nextView === "done") params.set("view", nextView);
+    if (nextView !== "active") params.set("view", nextView);
     if (nextLayout === "visual") params.set("layout", nextLayout);
     if (author) params.set("author", author);
 
@@ -172,12 +181,13 @@ export function InboxTable({
     (row) =>
       selectedRowIds.has(row.item.id) && !isDone(row) && inboxView === "active",
   );
-  const openCount = visibleRows.filter((row) => !isDone(row)).length;
-  const snoozedCount = filteredRows.filter(
-    (row) => row.userState?.snoozedUntil,
-  ).length;
-  const handledCount = filteredRows.filter(
-    (row) => row.userState?.status === "done" && !row.userState.snoozedUntil,
+  const statusTabs = [
+    { view: "active", label: "Active" },
+    { view: "snoozed", label: "Snoozed" },
+    { view: "done", label: "Handled" },
+  ] as const;
+  const openCount = visibleRows.filter(
+    (row) => inboxRowView(row) === "active",
   ).length;
   const rowsByGroup = filteredRows.reduce((groups, row) => {
     groups[classifyInboxSection(row, now)].push(row);
@@ -197,9 +207,7 @@ export function InboxTable({
     ),
   );
   const visualRows = groupInboxRows(
-    visibleRows.filter((row) =>
-      inboxView === "done" ? isDone(row) : !isDone(row),
-    ),
+    visibleRows.filter((row) => inboxRowView(row) === inboxView),
     now,
   );
   const previewRow = rows.find((row) => row.item.id === previewRowId);
@@ -266,45 +274,7 @@ export function InboxTable({
             ))}
           </select>
         </label>
-        <div className="flex items-center gap-3 whitespace-nowrap text-xs text-foreground/55">
-          <span>
-            <strong className="font-semibold text-foreground">
-              {openCount}
-            </strong>{" "}
-            open
-          </span>
-          <span>
-            <strong className="font-semibold text-foreground">
-              {snoozedCount}
-            </strong>{" "}
-            snoozed
-          </span>
-          <span>
-            <strong className="font-semibold text-foreground">
-              {handledCount}
-            </strong>{" "}
-            handled
-          </span>
-        </div>
         <div className="ml-auto flex flex-wrap items-center gap-2">
-          <div className="inline-flex rounded-md border border-foreground/10 bg-background/70 p-0.5 text-xs shadow-sm">
-            <button
-              type="button"
-              className={controlClass(inboxView === "active")}
-              aria-pressed={inboxView === "active"}
-              onClick={() => replaceInboxView("active")}
-            >
-              Active
-            </button>
-            <button
-              type="button"
-              className={controlClass(inboxView === "done")}
-              aria-pressed={inboxView === "done"}
-              onClick={() => replaceInboxView("done")}
-            >
-              Handled
-            </button>
-          </div>
           <div className="inline-flex rounded-md border border-foreground/10 bg-background/70 p-0.5 text-xs shadow-sm">
             <button
               type="button"
@@ -386,10 +356,64 @@ export function InboxTable({
           onClear={clearSelection}
         />
       ) : null}
+      <div
+        role="tablist"
+        aria-label="Inbox status"
+        className="mt-4 flex gap-1 border-b border-foreground/10"
+      >
+        {statusTabs.map((tab, index) => (
+          <button
+            key={tab.view}
+            id={`inbox-tab-${tab.view}`}
+            type="button"
+            role="tab"
+            aria-selected={inboxView === tab.view}
+            aria-controls="inbox-items"
+            tabIndex={inboxView === tab.view ? 0 : -1}
+            className={`-mb-px inline-flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition focus-visible:outline-2 focus-visible:outline-offset-2 ${
+              inboxView === tab.view
+                ? "border-foreground text-foreground"
+                : "border-transparent text-foreground/50 hover:border-foreground/20 hover:text-foreground"
+            }`}
+            onClick={() => replaceInboxView(tab.view)}
+            onKeyDown={(event) => {
+              const nextIndex =
+                event.key === "ArrowRight"
+                  ? (index + 1) % 3
+                  : event.key === "ArrowLeft"
+                    ? (index + 2) % 3
+                    : event.key === "Home"
+                      ? 0
+                      : event.key === "End"
+                        ? 2
+                        : undefined;
+              if (nextIndex === undefined) return;
+              event.preventDefault();
+              const nextView = statusTabs[nextIndex].view;
+              document.getElementById(`inbox-tab-${nextView}`)?.focus();
+              replaceInboxView(nextView);
+            }}
+          >
+            {tab.label}
+            <span className="rounded-full bg-foreground/7 px-2 py-0.5 text-xs tabular-nums">
+              {
+                visibleRows.filter((row) => inboxRowView(row) === tab.view)
+                  .length
+              }
+            </span>
+          </button>
+        ))}
+      </div>
       <section
+        id="inbox-items"
+        role="tabpanel"
+        aria-labelledby={`inbox-tab-${inboxView}`}
         className={`mt-4 grid gap-3 ${selectedRows.length ? "pb-24" : ""}`}
       >
-        {!selectedAuthor && openCount === 0 && filteredRows.some(isDone) ? (
+        {inboxView === "active" &&
+        !selectedAuthor &&
+        openCount === 0 &&
+        filteredRows.some(isDone) ? (
           <InboxZeroState />
         ) : null}
         {layout === "grouped" ? (
@@ -440,7 +464,7 @@ export function InboxTable({
                   className="overflow-visible"
                 >
                   {isStack ? (
-                    <div className="inbox-section-header flex items-center justify-between gap-3 border-b border-foreground/10 px-4 py-2.5">
+                    <div className="inbox-section-header flex items-center justify-between gap-3 border-b border-foreground/10 px-5 py-2.5">
                       <div className="flex min-w-0 items-center gap-2">
                         <span className="grid size-7 shrink-0 place-items-center rounded-md bg-foreground/7">
                           <GitPullRequestArrow className="size-3.5" />
@@ -474,9 +498,10 @@ export function InboxTable({
                           key={row.item.id}
                           row={row}
                           sectionId={sectionId}
-                          groupView={inboxView}
+                          groupView={inboxView === "active" ? "active" : "done"}
                           visuallyIndicated
                           stackPosition={isStack ? stackPosition : undefined}
+                          stackOrdinal={stackOrdinals.get(row.item.id)}
                           now={now}
                           timeZone={timeZone}
                           isTimelineExpanded={
@@ -516,7 +541,7 @@ export function InboxTable({
         )}
         {layout === "visual" && visualRows.length === 0 && rows.length ? (
           <Surface className="px-4 py-10 text-center text-sm text-foreground/50">
-            No {inboxView === "done" ? "handled" : "active"} items.
+            No {inboxView === "done" ? "handled" : inboxView} items.
           </Surface>
         ) : null}
         {rows.length === 0 ? (
