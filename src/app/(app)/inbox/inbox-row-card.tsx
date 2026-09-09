@@ -8,6 +8,7 @@ import {
   CircleDashed,
   CircleDot,
   Clock3,
+  GitBranch,
   GitCommitHorizontal,
   GitPullRequestArrow,
   Layers3,
@@ -308,14 +309,6 @@ function reviewBadge(row: InboxRow) {
   };
 }
 
-function Dot() {
-  return (
-    <span aria-hidden="true" className="mx-1.5 text-foreground/30">
-      ·
-    </span>
-  );
-}
-
 function StatusRow({
   label,
   className,
@@ -330,9 +323,11 @@ function StatusRow({
   detail?: string;
 }) {
   return (
-    <>
-      <dt className="text-foreground/50">{label}</dt>
-      <dd className="min-w-0">
+    <div className="min-w-0 rounded-md border border-foreground/8 bg-foreground/[0.025] px-3 py-2">
+      <dt className="text-[11px] font-semibold uppercase tracking-[0.08em] text-foreground/45">
+        {label}
+      </dt>
+      <dd className="mt-0.5 min-w-0">
         <span
           className={`inline-flex max-w-full items-center gap-1.5 font-medium ${className}`}
         >
@@ -345,7 +340,7 @@ function StatusRow({
           </span>
         ) : null}
       </dd>
-    </>
+    </div>
   );
 }
 
@@ -427,7 +422,7 @@ export function InboxRowCard({
 
   return (
     <article
-      className={`inbox-card group relative isolate grid gap-x-6 gap-y-3 py-4 transition lg:grid-cols-[minmax(0,1fr)_16rem] lg:items-start ${
+      className={`inbox-card group relative isolate grid gap-x-5 gap-y-4 py-4 transition lg:grid-cols-[minmax(0,1fr)_17rem] lg:items-stretch ${
         stackPosition ? "pl-10 pr-5" : "px-5"
       } ${
         isExiting ? "inbox-card-done-exit overflow-hidden" : "overflow-visible"
@@ -531,46 +526,12 @@ export function InboxRowCard({
               >
                 {item.title}
               </a>
-              <div className="mt-0.5 flex min-w-0 flex-wrap items-center text-[13px] leading-5 text-foreground/55">
-                <span className="truncate text-foreground/75">
-                  {repository.fullName}
-                </span>
-                <Dot />
-                <a
-                  href={item.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="tabular-nums hover:text-foreground hover:underline"
-                >
-                  #{item.number}
-                </a>
-                <Dot />
-                <span
-                  className={
-                    row.isAuthoredByViewer
-                      ? "font-medium text-foreground/80"
-                      : undefined
-                  }
-                >
-                  @{item.authorLogin}
-                </span>
-                <Dot />
-                <span>
+              <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-[13px] leading-5 text-foreground/55">
+                <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                  <Clock3 className="size-3.5 text-foreground/40" />
                   {dateTimeLabel("Updated", item.updatedAt, timeZone)}
                 </span>
-              </div>
-              <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-xs leading-5 text-foreground/55">
-                <span
-                  className="inline-flex min-w-0 max-w-full items-center gap-1.5 font-mono"
-                  title={`${pullRequestDetails.baseRef} ← ${pullRequestDetails.headRef}`}
-                >
-                  <span className="truncate">{pullRequestDetails.baseRef}</span>
-                  <span className="shrink-0 text-foreground/35">←</span>
-                  <span className="truncate text-foreground/80">
-                    {pullRequestDetails.headRef}
-                  </span>
-                </span>
-                <span className="inline-flex items-center whitespace-nowrap">
+                <span className="inline-flex items-center gap-1.5 whitespace-nowrap font-medium">
                   {hasChangeCounts ? (
                     <span className="inline-flex items-center gap-1.5 font-mono tabular-nums">
                       <span className="text-[var(--success-text)]">
@@ -583,32 +544,35 @@ export function InboxRowCard({
                   ) : (
                     <span>Changes unknown</span>
                   )}
-                  {pullRequestDetails.changedFiles !== undefined ? (
-                    <>
-                      <Dot />
-                      <span className="tabular-nums">
-                        {pullRequestDetails.changedFiles}{" "}
-                        {pullRequestDetails.changedFiles === 1
-                          ? "file"
-                          : "files"}
-                      </span>
-                    </>
-                  ) : null}
-                  {stackOrdinal ? (
-                    <>
-                      <Dot />
-                      <span
-                        className="inline-flex items-center gap-1 tabular-nums"
-                        title={`Stack position ${stackOrdinal.position} of ${stackOrdinal.total}`}
-                      >
-                        <Layers3 className="size-3.5 text-foreground/45" />
-                        {stackOrdinal.position} of {stackOrdinal.total}
-                      </span>
-                    </>
-                  ) : null}
                 </span>
+                {pullRequestDetails.changedFiles !== undefined ? (
+                  <span className="tabular-nums text-foreground/70">
+                    {pullRequestDetails.changedFiles}{" "}
+                    {pullRequestDetails.changedFiles === 1 ? "file" : "files"}
+                  </span>
+                ) : null}
               </div>
             </div>
+            <dl
+              aria-label="Pull request status"
+              className="grid min-w-0 gap-2 text-[13px] leading-5 sm:grid-cols-2"
+            >
+              <StatusRow
+                label="Checks"
+                className={checkStyles[state]}
+                icon={<ChecksIcon state={state} />}
+              >
+                {checksLabel(status, state)}
+              </StatusRow>
+              <StatusRow
+                label="Review"
+                className={review.style}
+                icon={review.icon}
+                detail={review.reviewers}
+              >
+                {review.label}
+              </StatusRow>
+            </dl>
             {timeline.length ? (
               <div
                 className={`flex min-w-0 items-center gap-0.5 border-t border-foreground/8 pt-2 text-xs leading-5 ${
@@ -674,191 +638,232 @@ export function InboxRowCard({
                 </button>
               </form>
             ) : null}
-          </div>
-        </div>
-      </div>
-      <div className="flex min-w-0 flex-col justify-between gap-4 self-stretch">
-        <dl
-          aria-label="Pull request status"
-          className="grid grid-cols-[3.25rem_minmax(0,1fr)] items-start gap-x-3 gap-y-1 text-[13px] leading-6"
-        >
-          <StatusRow
-            label="Checks"
-            className={checkStyles[state]}
-            icon={<ChecksIcon state={state} />}
-          >
-            {checksLabel(status, state)}
-          </StatusRow>
-          <StatusRow
-            label="Review"
-            className={review.style}
-            icon={review.icon}
-            detail={review.reviewers}
-          >
-            {review.label}
-          </StatusRow>
-        </dl>
-        <div
-          ref={snoozeMenuRef}
-          className="relative flex flex-wrap items-center justify-end gap-2"
-        >
-          <div className="relative z-30 inline-flex h-8 items-stretch divide-x divide-foreground/10 overflow-hidden rounded-md border border-foreground/12 bg-background/85 shadow-sm">
-            {codexLink ? (
-              <a
-                href={codexSessionUrl(codexLink.sessionId)}
-                className={`${toolbarItemClass} text-[var(--info-text)] hover:text-[var(--info-text)]`}
-                aria-label="Open linked Codex task"
-                title="Open linked Codex task"
-              >
-                <Bot className="size-3.5" />
-              </a>
-            ) : null}
-            <button
-              type="button"
-              className={`${toolbarItemClass} relative`}
-              disabled={isExiting}
-              aria-haspopup="dialog"
-              aria-label={
-                row.agentSessionCandidates.length
-                  ? `Preview pull request and ${row.agentSessionCandidates.length} suggested Codex ${row.agentSessionCandidates.length === 1 ? "task" : "tasks"}`
-                  : "Preview pull request"
-              }
-              title={
-                row.agentSessionCandidates.length
-                  ? `${row.agentSessionCandidates.length} suggested Codex ${row.agentSessionCandidates.length === 1 ? "task" : "tasks"}`
-                  : "Preview pull request"
-              }
-              onClick={() => onPreview(row)}
+            <div
+              ref={snoozeMenuRef}
+              className="relative flex flex-wrap items-center gap-2 border-t border-foreground/8 pt-2 lg:absolute lg:right-5 lg:top-4 lg:border-t-0 lg:pt-0"
             >
-              <PanelRightOpen className="size-3.5" />
-              {!codexLink && row.agentSessionCandidates.length ? (
-                <span className="absolute right-1 top-1 size-1.5 rounded-full bg-sky-500" />
-              ) : null}
-            </button>
-            <button
-              type="button"
-              className={toolbarItemClass}
-              disabled={isExiting}
-              aria-expanded={isNoteOpen}
-              aria-label={note ? "Edit note" : "Add note"}
-              title={note ? "Edit Note" : "Add Note"}
-              onClick={() => onToggleNote(item.id)}
-            >
-              <Pencil className="size-3.5" />
-            </button>
-            {groupView === "active" ? (
-              <form
-                action={promoteToShipIt}
-                onSubmit={onShipItSubmit}
-                className="contents"
-              >
-                <input type="hidden" name="inboxItemId" value={item.id} />
-                <input
-                  type="hidden"
-                  name="promoted"
-                  value={shipItPromoted ? "false" : "true"}
-                />
+              <div className="relative z-30 inline-flex h-8 items-stretch divide-x divide-foreground/10 overflow-hidden rounded-md border border-foreground/12 bg-background/85 shadow-sm">
+                {codexLink ? (
+                  <a
+                    href={codexSessionUrl(codexLink.sessionId)}
+                    className={`${toolbarItemClass} text-[var(--info-text)] hover:text-[var(--info-text)]`}
+                    aria-label="Open linked Codex task"
+                    title="Open linked Codex task"
+                  >
+                    <Bot className="size-3.5" />
+                  </a>
+                ) : null}
                 <button
-                  type="submit"
-                  className={`${toolbarItemClass} ${
-                    shipItPromoted
-                      ? "bg-emerald-500/12 text-[var(--success-text)] hover:bg-emerald-500/18 hover:text-[var(--success-text)]"
-                      : ""
-                  }`}
+                  type="button"
+                  className={`${toolbarItemClass} relative`}
                   disabled={isExiting}
-                  aria-label={shipItPromoted ? "Unship" : "Ship It"}
-                  aria-pressed={shipItPromoted}
-                  title={shipItPromoted ? "Unship" : "Ship It"}
+                  aria-haspopup="dialog"
+                  aria-label={
+                    row.agentSessionCandidates.length
+                      ? `Preview pull request and ${row.agentSessionCandidates.length} suggested Codex ${row.agentSessionCandidates.length === 1 ? "task" : "tasks"}`
+                      : "Preview pull request"
+                  }
+                  title={
+                    row.agentSessionCandidates.length
+                      ? `${row.agentSessionCandidates.length} suggested Codex ${row.agentSessionCandidates.length === 1 ? "task" : "tasks"}`
+                      : "Preview pull request"
+                  }
+                  onClick={() => onPreview(row)}
                 >
-                  <Rocket className="size-3.5" />
+                  <PanelRightOpen className="size-3.5" />
+                  {!codexLink && row.agentSessionCandidates.length ? (
+                    <span className="absolute right-1 top-1 size-1.5 rounded-full bg-sky-500" />
+                  ) : null}
                 </button>
-              </form>
-            ) : null}
-            {groupView === "active" ? (
-              <button
-                type="button"
-                className={`${toolbarItemClass} gap-0.5`}
-                disabled={isExiting}
-                aria-expanded={isSnoozeOpen}
-                aria-label="Snooze"
-                title="Snooze"
-                onClick={() => onToggleSnooze(item.id)}
-              >
-                <Clock3 className="size-3.5" />
-                <ChevronDown className="size-3 text-foreground/45" />
-              </button>
-            ) : null}
-          </div>
-          {isNoteOpen ? (
-            <form
-              action={setUserNote}
-              onSubmit={onNoteSubmit}
-              className="absolute right-0 top-10 z-40 grid w-72 gap-2 rounded-lg border border-foreground/10 bg-background p-2 shadow-xl"
-            >
-              <input type="hidden" name="inboxItemId" value={item.id} />
-              <input
-                ref={noteInputRef}
-                name="note"
-                defaultValue={note}
-                maxLength={160}
-                autoComplete="off"
-                placeholder="waiting for Cypress"
-                className="h-9 rounded-md border border-foreground/10 bg-transparent px-2.5 text-sm outline-none"
-              />
-              <button
-                type="submit"
-                className="inline-flex h-8 items-center justify-center rounded-md bg-[var(--selected-control-bg)] px-2.5 text-xs font-semibold text-[var(--selected-control-fg)]"
-              >
-                {note ? "Save note" : "Add note"}
-              </button>
-            </form>
-          ) : null}
-          {isSnoozeOpen ? (
-            <div className="absolute right-0 top-10 z-40 w-40 overflow-hidden rounded-lg border border-foreground/10 bg-background shadow-xl">
-              {snoozeOptions.map((option) => (
+                <button
+                  type="button"
+                  className={toolbarItemClass}
+                  disabled={isExiting}
+                  aria-expanded={isNoteOpen}
+                  aria-label={note ? "Edit note" : "Add note"}
+                  title={note ? "Edit note" : "Add note"}
+                  onClick={() => onToggleNote(item.id)}
+                >
+                  <Pencil className="size-3.5" />
+                </button>
+                {groupView === "active" ? (
+                  <form
+                    action={promoteToShipIt}
+                    onSubmit={onShipItSubmit}
+                    className="contents"
+                  >
+                    <input type="hidden" name="inboxItemId" value={item.id} />
+                    <input
+                      type="hidden"
+                      name="promoted"
+                      value={shipItPromoted ? "false" : "true"}
+                    />
+                    <button
+                      type="submit"
+                      className={`${toolbarItemClass} ${
+                        shipItPromoted
+                          ? "bg-emerald-500/12 text-[var(--success-text)] hover:bg-emerald-500/18 hover:text-[var(--success-text)]"
+                          : ""
+                      }`}
+                      disabled={isExiting}
+                      aria-label={shipItPromoted ? "Unship" : "Ship it"}
+                      aria-pressed={shipItPromoted}
+                      title={shipItPromoted ? "Unship" : "Ship it"}
+                    >
+                      <Rocket className="size-3.5" />
+                    </button>
+                  </form>
+                ) : null}
+                {groupView === "active" ? (
+                  <button
+                    type="button"
+                    className={`${toolbarItemClass} gap-0.5`}
+                    disabled={isExiting}
+                    aria-expanded={isSnoozeOpen}
+                    aria-label="Snooze"
+                    title="Snooze"
+                    onClick={() => onToggleSnooze(item.id)}
+                  >
+                    <Clock3 className="size-3.5" />
+                    <ChevronDown className="size-3 text-foreground/45" />
+                  </button>
+                ) : null}
+              </div>
+              {isNoteOpen ? (
                 <form
-                  key={option.value}
-                  action={snoozeItem}
-                  onSubmit={(event) => onSnoozeSubmit(event, item.id)}
+                  action={setUserNote}
+                  onSubmit={onNoteSubmit}
+                  className="absolute right-0 top-10 z-40 grid w-72 gap-2 rounded-lg border border-foreground/10 bg-background p-2 shadow-xl"
                 >
                   <input type="hidden" name="inboxItemId" value={item.id} />
-                  <input type="hidden" name="duration" value={option.value} />
+                  <input
+                    ref={noteInputRef}
+                    name="note"
+                    defaultValue={note}
+                    maxLength={160}
+                    autoComplete="off"
+                    placeholder="waiting for Cypress"
+                    className="h-9 rounded-md border border-foreground/10 bg-transparent px-2.5 text-sm outline-none"
+                  />
                   <button
                     type="submit"
-                    className="flex h-9 w-full items-center gap-2 px-3 text-left text-xs font-medium hover:bg-foreground/[0.05]"
+                    className="inline-flex h-8 items-center justify-center rounded-md bg-[var(--selected-control-bg)] px-2.5 text-xs font-semibold text-[var(--selected-control-fg)]"
                   >
-                    <Clock3 className="size-3.5 text-foreground/45" />
-                    {option.label}
+                    {note ? "Save note" : "Add note"}
                   </button>
                 </form>
-              ))}
+              ) : null}
+              {isSnoozeOpen ? (
+                <div className="absolute right-0 top-10 z-40 w-40 overflow-hidden rounded-lg border border-foreground/10 bg-background shadow-xl">
+                  {snoozeOptions.map((option) => (
+                    <form
+                      key={option.value}
+                      action={snoozeItem}
+                      onSubmit={(event) => onSnoozeSubmit(event, item.id)}
+                    >
+                      <input type="hidden" name="inboxItemId" value={item.id} />
+                      <input
+                        type="hidden"
+                        name="duration"
+                        value={option.value}
+                      />
+                      <button
+                        type="submit"
+                        className="flex h-9 w-full items-center gap-2 px-3 text-left text-xs font-medium hover:bg-foreground/[0.05]"
+                      >
+                        <Clock3 className="size-3.5 text-foreground/45" />
+                        {option.label}
+                      </button>
+                    </form>
+                  ))}
+                </div>
+              ) : null}
+              <form
+                action={updateStatus}
+                onSubmit={(event) => onStatusSubmit(event, item.id)}
+              >
+                <input
+                  type="hidden"
+                  name="status"
+                  value={groupView === "done" ? "active" : "done"}
+                />
+                <input type="hidden" name="inboxItemId" value={item.id} />
+                <button
+                  type="submit"
+                  className="relative z-30 inline-flex h-8 items-center gap-1.5 rounded-md border border-foreground/10 bg-[var(--selected-control-bg)] px-3 text-xs font-semibold text-[var(--selected-control-fg)] shadow-sm hover:opacity-90 disabled:opacity-60"
+                  disabled={isExiting}
+                >
+                  {groupView === "done" ? (
+                    <RotateCcw className="size-3" />
+                  ) : (
+                    <Check className="size-3" />
+                  )}
+                  {groupView === "done" ? "Active" : "Done"}
+                </button>
+              </form>
             </div>
-          ) : null}
-          <form
-            action={updateStatus}
-            onSubmit={(event) => onStatusSubmit(event, item.id)}
-          >
-            <input
-              type="hidden"
-              name="status"
-              value={groupView === "done" ? "active" : "done"}
-            />
-            <input type="hidden" name="inboxItemId" value={item.id} />
-            <button
-              type="submit"
-              className="relative z-30 inline-flex h-8 items-center gap-1.5 rounded-md border border-foreground/10 bg-[var(--selected-control-bg)] px-3 text-xs font-semibold text-[var(--selected-control-fg)] shadow-sm hover:opacity-90 disabled:opacity-60"
-              disabled={isExiting}
-            >
-              {groupView === "done" ? (
-                <RotateCcw className="size-3" />
-              ) : (
-                <Check className="size-3" />
-              )}
-              {groupView === "done" ? "Active" : "Done"}
-            </button>
-          </form>
+          </div>
         </div>
       </div>
+      <aside className="min-w-0 border-t border-foreground/8 pt-3 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-12">
+        <dl className="grid grid-cols-[4.25rem_minmax(0,1fr)] items-start gap-x-2 gap-y-2 text-xs leading-5 sm:grid-cols-[3.75rem_minmax(0,1fr)_3.75rem_minmax(0,1fr)] lg:grid-cols-[4.25rem_minmax(0,1fr)]">
+          <dt className="text-foreground/45">Repository</dt>
+          <dd
+            className="truncate font-medium text-foreground/75"
+            title={repository.fullName}
+          >
+            {repository.fullName}
+          </dd>
+          <dt className="text-foreground/45">Number</dt>
+          <dd>
+            <a
+              href={item.url}
+              target="_blank"
+              rel="noreferrer"
+              className="font-medium tabular-nums text-foreground/75 hover:text-foreground hover:underline"
+            >
+              #{item.number}
+            </a>
+          </dd>
+          <dt className="text-foreground/45">Author</dt>
+          <dd
+            className={`truncate ${
+              row.isAuthoredByViewer
+                ? "font-semibold text-foreground/85"
+                : "font-medium text-foreground/75"
+            }`}
+          >
+            @{item.authorLogin}
+          </dd>
+          <dt className="text-foreground/45">From</dt>
+          <dd
+            className="truncate font-mono text-[11px] text-foreground/75"
+            title={pullRequestDetails.headRef}
+          >
+            <GitBranch className="mr-1 inline size-3 text-foreground/40" />
+            {pullRequestDetails.headRef}
+          </dd>
+          <dt className="text-foreground/45">Into</dt>
+          <dd
+            className="truncate font-mono text-[11px] text-foreground/60"
+            title={pullRequestDetails.baseRef}
+          >
+            {pullRequestDetails.baseRef}
+          </dd>
+          {stackOrdinal ? (
+            <>
+              <dt className="text-foreground/45">Stack</dt>
+              <dd
+                className="inline-flex items-center gap-1 tabular-nums text-foreground/65"
+                title={`Stack position ${stackOrdinal.position} of ${stackOrdinal.total}`}
+              >
+                <Layers3 className="size-3.5 text-foreground/40" />
+                {stackOrdinal.position} of {stackOrdinal.total}
+              </dd>
+            </>
+          ) : null}
+        </dl>
+      </aside>
     </article>
   );
 }
