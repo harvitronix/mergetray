@@ -7,9 +7,7 @@ import {
   ChevronRight,
   CircleDot,
   Clock3,
-  GitBranch,
   GitCommitHorizontal,
-  GitPullRequest,
   GitPullRequestArrow,
   Layers3,
   MessageSquare,
@@ -200,42 +198,6 @@ function timelineLabel(item: InboxTimelineItem) {
   }
 }
 
-function changeLabel(pullRequest: {
-  additions?: number;
-  deletions?: number;
-  changedFiles?: number;
-}) {
-  if (
-    pullRequest.additions === undefined ||
-    pullRequest.deletions === undefined
-  ) {
-    return "Changes unknown";
-  }
-
-  const files =
-    pullRequest.changedFiles === undefined
-      ? ""
-      : ` in ${pullRequest.changedFiles} files`;
-
-  return `+${pullRequest.additions} / -${pullRequest.deletions}${files}`;
-}
-
-function changeStyle(pullRequest: { additions?: number; deletions?: number }) {
-  if (
-    pullRequest.additions === undefined ||
-    pullRequest.deletions === undefined
-  ) {
-    return "text-foreground/60";
-  }
-
-  const total = pullRequest.additions + pullRequest.deletions;
-  if (total > 800)
-    return "pill-danger text-[var(--danger-text)] ring-red-500/20";
-  if (total < 100)
-    return "pill-success text-[var(--success-text)] ring-emerald-500/20";
-  return "pill-muted text-foreground/60 ring-foreground/10";
-}
-
 function dayCountLabel(value: number) {
   const days = Math.max(1, Math.floor(value / (24 * 60 * 60 * 1000)));
   return `${days} ${days === 1 ? "day" : "days"}`;
@@ -281,7 +243,8 @@ function reviewBadge(row: InboxRow) {
   if (humanApprovals.length) {
     return {
       icon: <ThumbsUp className="size-3" />,
-      label: humanApprovals
+      label: "Approved",
+      reviewers: humanApprovals
         .map((approval) => `@${approval.githubLogin}`)
         .join(", "),
       style: "pill-success text-[var(--success-text)] ring-emerald-500/20",
@@ -291,18 +254,11 @@ function reviewBadge(row: InboxRow) {
   if (row.approvals.length) {
     return {
       icon: <ThumbsUp className="size-3" />,
-      label: row.approvals
+      label: "Bot approved",
+      reviewers: row.approvals
         .map((approval) => `@${approval.githubLogin}`)
         .join(", "),
       style: "pill-muted text-foreground/60 ring-foreground/10",
-    };
-  }
-
-  if (isPromotedToShipIt(row)) {
-    return {
-      icon: <Rocket className="size-3" />,
-      label: "Promoted",
-      style: "pill-success text-[var(--success-text)] ring-emerald-500/20",
     };
   }
 
@@ -351,9 +307,7 @@ export function InboxRowCard({
       : undefined;
   const itemIdentifier = `${repository.fullName}#${item.number}`;
   const review = reviewBadge(row);
-  const hideReviewBadge =
-    actionReason === "Changes requested" &&
-    review.label === "Changes requested";
+  const showActionReason = actionReason && actionReason !== review.label;
   const visibleTimeline =
     !isTimelineExpanded && timeline.length > timelinePreviewCount
       ? timeline.slice(-timelinePreviewCount)
@@ -375,7 +329,7 @@ export function InboxRowCard({
 
   return (
     <article
-      className={`inbox-card group relative grid gap-x-4 gap-y-3 py-4 transition md:grid-cols-[minmax(0,1fr)_auto] md:items-start ${
+      className={`inbox-card group relative grid gap-x-4 gap-y-3 py-4 transition lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start ${
         stackPosition ? "pl-9 pr-4" : "px-4"
       } ${
         isExiting ? "inbox-card-done-exit overflow-hidden" : "overflow-visible"
@@ -417,333 +371,382 @@ export function InboxRowCard({
           unoptimized
         />
       ) : null}
-      <div className="flex min-w-0 items-start gap-3">
-        {groupView === "active" && selectionEnabled ? (
-          <input
-            type="checkbox"
-            className={`mt-1 size-4 shrink-0 cursor-pointer accent-[var(--selected-control-bg)] transition-opacity ${
-              isSelected
-                ? "opacity-100"
-                : "opacity-35 group-hover:opacity-100 group-focus-within:opacity-100"
-            }`}
-            checked={isSelected}
-            disabled={isExiting}
-            aria-label={`Select pull request ${itemIdentifier}`}
-            onChange={() => onToggleSelection(item.id)}
-          />
-        ) : null}
-        <div className="min-w-0">
-          <div className="mb-2 flex flex-wrap items-center gap-1.5">
-            {visuallyIndicated ? (
-              <span
-                className={`inline-flex h-6 items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold ring-1 ${sectionIndicator.badge}`}
+      <div className="grid min-w-0 gap-3">
+        <div className="flex min-w-0 items-start gap-3">
+          {groupView === "active" && selectionEnabled ? (
+            <input
+              type="checkbox"
+              className={`mt-1 size-4 shrink-0 cursor-pointer accent-[var(--selected-control-bg)] transition-opacity ${
+                isSelected
+                  ? "opacity-100"
+                  : "opacity-35 group-hover:opacity-100 group-focus-within:opacity-100"
+              }`}
+              checked={isSelected}
+              disabled={isExiting}
+              aria-label={`Select pull request ${itemIdentifier}`}
+              onChange={() => onToggleSelection(item.id)}
+            />
+          ) : null}
+          <div className="min-w-0">
+            {visuallyIndicated ||
+            pullRequestDetails.autoMergeEnabled ||
+            showActionReason ? (
+              <div className="mb-2 flex flex-wrap items-center gap-1.5">
+                {visuallyIndicated ? (
+                  <span
+                    className={`inline-flex h-6 items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold ring-1 ${sectionIndicator.badge}`}
+                  >
+                    <span
+                      className={`size-1.5 rounded-full ${sectionIndicator.rail}`}
+                    />
+                    {sectionLabels[sectionId]}
+                  </span>
+                ) : null}
+                {pullRequestDetails.autoMergeEnabled ? (
+                  <span className="inline-flex h-6 items-center gap-1 rounded-md bg-fuchsia-600 px-2.5 text-xs font-bold uppercase tracking-wide text-white shadow-sm">
+                    <Rocket className="size-3" />
+                    Auto-merge on
+                  </span>
+                ) : null}
+                {showActionReason ? (
+                  <span className="pill-warning inline-flex h-6 items-center gap-1 rounded-md px-2.5 text-xs font-semibold text-[var(--warning-text)] ring-1 ring-amber-500/20">
+                    <span className="size-1.5 rounded-full bg-amber-500" />
+                    {actionReason}
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
+            <a
+              href={item.url}
+              target="_blank"
+              rel="noreferrer"
+              className="block truncate text-base font-semibold leading-snug hover:underline sm:text-lg"
+            >
+              {item.title}
+            </a>
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-foreground/65">
+              <span>{repository.fullName}</span>
+              <a
+                href={item.url}
+                target="_blank"
+                rel="noreferrer"
+                className="hover:text-foreground hover:underline"
               >
+                #{item.number}
+              </a>
+              <span
+                className={
+                  row.isAuthoredByViewer
+                    ? "pill-info inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 font-medium text-[var(--info-text)] ring-1 ring-sky-500/20"
+                    : undefined
+                }
+              >
+                @{item.authorLogin}
+              </span>
+              <span>{dateTimeLabel("Updated", item.updatedAt, timeZone)}</span>
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-foreground/65">
+              <span className="inline-flex min-w-0 max-w-full items-start gap-1">
+                <code className="pill-info min-w-0 break-all rounded px-1.5 py-0.5 text-xs text-[var(--info-text)]">
+                  {pullRequestDetails.baseRef}
+                </code>
+                <span className="shrink-0 text-foreground/50">←</span>
+                <code className="pill-info min-w-0 break-all rounded px-1.5 py-0.5 text-xs text-[var(--info-text)]">
+                  {pullRequestDetails.headRef}
+                </code>
+              </span>
+              <span className="inline-flex items-center gap-2 border-l border-foreground/15 pl-3 tabular-nums">
+                {pullRequestDetails.additions === undefined ||
+                pullRequestDetails.deletions === undefined ? (
+                  "Changes unknown"
+                ) : (
+                  <>
+                    <span className="text-[var(--success-text)]">
+                      +{pullRequestDetails.additions}
+                    </span>
+                    <span className="text-[var(--danger-text)]">
+                      −{pullRequestDetails.deletions}
+                    </span>
+                  </>
+                )}
+              </span>
+              {pullRequestDetails.changedFiles !== undefined ? (
+                <span>
+                  {pullRequestDetails.changedFiles}{" "}
+                  {pullRequestDetails.changedFiles === 1 ? "file" : "files"}
+                </span>
+              ) : null}
+              {stackOrdinal ? (
                 <span
-                  className={`size-1.5 rounded-full ${sectionIndicator.rail}`}
-                />
-                {sectionLabels[sectionId]}
-              </span>
-            ) : null}
-            {pullRequestDetails.autoMergeEnabled ? (
-              <span className="inline-flex h-6 items-center gap-1 rounded-md bg-fuchsia-600 px-2.5 text-xs font-bold uppercase tracking-wide text-white shadow-sm">
-                <Rocket className="size-3" />
-                Auto-merge on
-              </span>
-            ) : null}
-            {hideReviewBadge ? null : (
-              <span
-                className={`inline-flex h-6 items-center gap-1 rounded-md px-2.5 text-xs font-semibold ring-1 ${review.style}`}
-              >
-                {review.icon}
-                {review.label}
-              </span>
-            )}
-            {actionReason ? (
-              <span className="pill-warning inline-flex h-6 items-center gap-1 rounded-md px-2.5 text-xs font-semibold text-[var(--warning-text)] ring-1 ring-amber-500/20">
-                <span className="size-1.5 rounded-full bg-amber-500" />
-                {actionReason}
-              </span>
-            ) : null}
-          </div>
-          <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-foreground/55">
-            <span className="inline-flex items-center gap-1 font-mono">
-              <GitPullRequest className="size-3" />
-              {itemIdentifier}
-            </span>
-            <span>{dateTimeLabel("Updated", item.updatedAt, timeZone)}</span>
-          </div>
-          <a
-            href={item.url}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-1.5 block truncate text-base font-semibold leading-snug hover:underline sm:text-lg"
-          >
-            {item.title}
-          </a>
-          <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-foreground/60">
-            <span className="pill-muted inline-flex h-6 max-w-full items-center gap-1 rounded-full border border-foreground/10 px-2">
-              <GitBranch className="size-3 shrink-0" />
-              <span className="shrink-0">{pullRequestDetails.baseRef}</span>
-              <span aria-hidden="true" className="shrink-0">
-                ←
-              </span>
-              <span
-                className="min-w-0 max-w-[220px] truncate"
-                title={pullRequestDetails.headRef}
-              >
-                {pullRequestDetails.headRef}
-              </span>
-            </span>
-            <span className="pill-muted inline-flex h-6 items-center rounded-full border border-foreground/10 px-2">
-              By @{item.authorLogin}
-            </span>
-            <span
-              className={`inline-flex h-6 items-center rounded-full px-2 font-mono ring-1 ${changeStyle(pullRequestDetails)}`}
-            >
-              {changeLabel(pullRequestDetails)}
-            </span>
-            <span
-              className={`inline-flex h-6 items-center gap-1 rounded-full px-2 font-medium ring-1 ${checkStyles[state]}`}
-            >
-              <ChecksIcon state={state} />
-              {checksLabel(status, state)}
-            </span>
-            {stackOrdinal ? (
-              <span
-                className="pill-muted inline-flex h-6 items-center gap-1 rounded-full px-2 font-medium ring-1 ring-foreground/10"
-                title={`Stack position ${stackOrdinal.position} of ${stackOrdinal.total}`}
-              >
-                <Layers3 className="size-3" />
-                {stackOrdinal.position} of {stackOrdinal.total}
-              </span>
-            ) : null}
+                  className="pill-muted inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-foreground/10"
+                  title={`Stack position ${stackOrdinal.position} of ${stackOrdinal.total}`}
+                >
+                  <Layers3 className="size-3.5" />
+                  {stackOrdinal.position} of {stackOrdinal.total}
+                </span>
+              ) : null}
+            </div>
           </div>
         </div>
-      </div>
-      <div className="flex flex-wrap items-center gap-1.5 md:justify-end">
-        {codexLink ? (
-          <a
-            href={codexSessionUrl(codexLink.sessionId)}
-            className="relative z-30 inline-flex h-8 w-8 items-center justify-center rounded-md border border-sky-500/30 bg-sky-500/10 text-[var(--info-text)] shadow-sm"
-            aria-label="Open linked Codex task"
-            title="Open linked Codex task"
-          >
-            <Bot className="size-3.5" />
-          </a>
+        {timeline.length ? (
+          <div className="min-w-0 overflow-hidden pt-1">
+            <div
+              className={`flex items-center gap-x-1 gap-y-1.5 text-[11px] ${
+                isTimelineExpanded
+                  ? "flex-wrap"
+                  : "min-w-0 flex-nowrap overflow-hidden"
+              }`}
+            >
+              {previousTimelineCount > 0 || isTimelineExpanded ? (
+                <button
+                  type="button"
+                  className="pill-info inline-flex h-7 shrink-0 items-center rounded-md px-2.5 text-[11px] font-semibold text-[var(--info-text)]"
+                  onClick={() => onToggleTimeline(item.id)}
+                >
+                  {isTimelineExpanded
+                    ? "Show less"
+                    : `${previousTimelineCount} previous`}
+                  <ChevronDown
+                    className={`ml-1 size-3 text-foreground/45 transition ${
+                      isTimelineExpanded ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
+              ) : null}
+              {visibleTimeline.map((item, index) => (
+                <span
+                  key={`${item.order ?? item.occurredAt}-${item.kind}-${item.actorLogin ?? ""}`}
+                  className="inline-flex min-w-0 items-center gap-0.5"
+                >
+                  {index > 0 || previousTimelineCount > 0 ? (
+                    <ChevronRight className="size-2.5 shrink-0 text-foreground/30" />
+                  ) : null}
+                  <span
+                    className={`inline-flex h-7 min-w-0 items-center gap-1.5 rounded-md px-2.5 font-semibold ${timelineStyle(item.kind)}`}
+                  >
+                    <TimelineIcon kind={item.kind} />
+                    <span className="truncate">{timelineLabel(item)}</span>
+                  </span>
+                </span>
+              ))}
+            </div>
+          </div>
         ) : null}
-        <button
-          type="button"
-          className="relative z-30 inline-flex h-8 w-8 items-center justify-center rounded-md border border-foreground/12 bg-background/85 text-xs font-semibold shadow-sm disabled:opacity-60"
-          disabled={isExiting}
-          aria-haspopup="dialog"
-          aria-label={
-            row.agentSessionCandidates.length
-              ? `Preview pull request and ${row.agentSessionCandidates.length} suggested Codex ${row.agentSessionCandidates.length === 1 ? "task" : "tasks"}`
-              : "Preview pull request"
-          }
-          title={
-            row.agentSessionCandidates.length
-              ? `${row.agentSessionCandidates.length} suggested Codex ${row.agentSessionCandidates.length === 1 ? "task" : "tasks"}`
-              : "Preview pull request"
-          }
-          onClick={() => onPreview(row)}
-        >
-          <PanelRightOpen className="size-3.5" />
-          {!codexLink && row.agentSessionCandidates.length ? (
-            <span className="absolute -right-1 -top-1 size-2 rounded-full bg-sky-500 ring-2 ring-background" />
+        {note ? (
+          <form
+            action={setUserNote}
+            onSubmit={onRemoveNoteSubmit}
+            className="flex max-w-2xl items-start gap-2 rounded-md bg-sky-500/10 px-3 py-2 text-sm font-medium text-[var(--info-text)] ring-1 ring-sky-500/20"
+          >
+            <input type="hidden" name="inboxItemId" value={item.id} />
+            <input type="hidden" name="note" value="" />
+            <StickyNote className="mt-0.5 size-4 shrink-0" />
+            <span className="min-w-0 flex-1 break-words">{note}</span>
+            <button
+              type="submit"
+              className="mt-0.5 grid size-4 shrink-0 place-items-center rounded border border-sky-500/40 bg-background/40 text-[var(--info-text)] transition hover:bg-sky-500/15"
+              aria-label="Mark note done"
+            >
+              <Check className="size-3" />
+            </button>
+          </form>
+        ) : null}
+      </div>
+      <div className="grid min-w-0 gap-3">
+        <div className="flex flex-wrap items-center gap-1.5 lg:justify-end">
+          {codexLink ? (
+            <a
+              href={codexSessionUrl(codexLink.sessionId)}
+              className="relative z-30 inline-flex h-8 w-8 items-center justify-center rounded-md border border-sky-500/30 bg-sky-500/10 text-[var(--info-text)] shadow-sm"
+              aria-label="Open linked Codex task"
+              title="Open linked Codex task"
+            >
+              <Bot className="size-3.5" />
+            </a>
           ) : null}
-        </button>
-        <div className="relative">
           <button
             type="button"
             className="relative z-30 inline-flex h-8 w-8 items-center justify-center rounded-md border border-foreground/12 bg-background/85 text-xs font-semibold shadow-sm disabled:opacity-60"
             disabled={isExiting}
-            aria-expanded={isNoteOpen}
-            aria-label={note ? "Edit note" : "Add note"}
-            title={note ? "Edit Note" : "Add Note"}
-            onClick={() => onToggleNote(item.id)}
+            aria-haspopup="dialog"
+            aria-label={
+              row.agentSessionCandidates.length
+                ? `Preview pull request and ${row.agentSessionCandidates.length} suggested Codex ${row.agentSessionCandidates.length === 1 ? "task" : "tasks"}`
+                : "Preview pull request"
+            }
+            title={
+              row.agentSessionCandidates.length
+                ? `${row.agentSessionCandidates.length} suggested Codex ${row.agentSessionCandidates.length === 1 ? "task" : "tasks"}`
+                : "Preview pull request"
+            }
+            onClick={() => onPreview(row)}
           >
-            <Pencil className="size-3" />
+            <PanelRightOpen className="size-3.5" />
+            {!codexLink && row.agentSessionCandidates.length ? (
+              <span className="absolute -right-1 -top-1 size-2 rounded-full bg-sky-500 ring-2 ring-background" />
+            ) : null}
           </button>
-          {isNoteOpen ? (
-            <form
-              action={setUserNote}
-              onSubmit={onNoteSubmit}
-              className="absolute right-0 top-9 z-40 grid w-72 gap-2 rounded-lg border border-foreground/10 bg-background p-2 shadow-xl"
-            >
-              <input type="hidden" name="inboxItemId" value={item.id} />
-              <input
-                ref={noteInputRef}
-                name="note"
-                defaultValue={note}
-                maxLength={160}
-                autoComplete="off"
-                placeholder="waiting for Cypress"
-                className="h-9 rounded-md border border-foreground/10 bg-transparent px-2.5 text-sm outline-none"
-              />
-              <button
-                type="submit"
-                className="inline-flex h-8 items-center justify-center rounded-md bg-[var(--selected-control-bg)] px-2.5 text-xs font-semibold text-[var(--selected-control-fg)]"
-              >
-                {note ? "Save note" : "Add note"}
-              </button>
-            </form>
-          ) : null}
-        </div>
-        {groupView === "active" ? (
-          <form action={promoteToShipIt} onSubmit={onShipItSubmit}>
-            <input type="hidden" name="inboxItemId" value={item.id} />
-            <input
-              type="hidden"
-              name="promoted"
-              value={shipItPromoted ? "false" : "true"}
-            />
-            <button
-              type="submit"
-              className={`relative z-30 inline-flex h-8 w-8 items-center justify-center rounded-md border text-xs font-semibold shadow-sm disabled:opacity-60 ${
-                shipItPromoted
-                  ? "border-emerald-500/30 bg-emerald-500/15 text-[var(--success-text)] ring-1 ring-emerald-500/25"
-                  : "border-foreground/12 bg-background/85"
-              }`}
-              disabled={isExiting}
-              aria-label={shipItPromoted ? "Unship" : "Ship It"}
-              aria-pressed={shipItPromoted}
-              title={shipItPromoted ? "Unship" : "Ship It"}
-            >
-              <Rocket className="size-3" />
-            </button>
-          </form>
-        ) : null}
-        {groupView === "active" ? (
           <div className="relative">
             <button
               type="button"
-              className="relative z-30 inline-flex h-8 items-center gap-1 rounded-md border border-foreground/12 bg-background/85 px-2.5 text-xs font-semibold shadow-sm disabled:opacity-60"
+              className="relative z-30 inline-flex h-8 w-8 items-center justify-center rounded-md border border-foreground/12 bg-background/85 text-xs font-semibold shadow-sm disabled:opacity-60"
               disabled={isExiting}
-              aria-expanded={isSnoozeOpen}
-              aria-label="Snooze"
-              title="Snooze"
-              onClick={() => onToggleSnooze(item.id)}
+              aria-expanded={isNoteOpen}
+              aria-label={note ? "Edit note" : "Add note"}
+              title={note ? "Edit Note" : "Add Note"}
+              onClick={() => onToggleNote(item.id)}
             >
-              <Clock3 className="size-3" />
-              <ChevronDown className="size-3 text-foreground/45" />
+              <Pencil className="size-3" />
             </button>
-            {isSnoozeOpen ? (
-              <div className="absolute right-0 top-9 z-40 w-36 overflow-hidden rounded-lg border border-foreground/10 bg-background shadow-xl">
-                {snoozeOptions.map((option) => (
-                  <form
-                    key={option.value}
-                    action={snoozeItem}
-                    onSubmit={(event) => onSnoozeSubmit(event, item.id)}
-                  >
-                    <input type="hidden" name="inboxItemId" value={item.id} />
-                    <input type="hidden" name="duration" value={option.value} />
-                    <button
-                      type="submit"
-                      className="flex h-9 w-full items-center gap-2 px-3 text-left text-xs font-medium"
-                    >
-                      <Clock3 className="size-3.5 text-foreground/45" />
-                      {option.label}
-                    </button>
-                  </form>
-                ))}
-              </div>
+            {isNoteOpen ? (
+              <form
+                action={setUserNote}
+                onSubmit={onNoteSubmit}
+                className="absolute right-0 top-9 z-40 grid w-72 gap-2 rounded-lg border border-foreground/10 bg-background p-2 shadow-xl"
+              >
+                <input type="hidden" name="inboxItemId" value={item.id} />
+                <input
+                  ref={noteInputRef}
+                  name="note"
+                  defaultValue={note}
+                  maxLength={160}
+                  autoComplete="off"
+                  placeholder="waiting for Cypress"
+                  className="h-9 rounded-md border border-foreground/10 bg-transparent px-2.5 text-sm outline-none"
+                />
+                <button
+                  type="submit"
+                  className="inline-flex h-8 items-center justify-center rounded-md bg-[var(--selected-control-bg)] px-2.5 text-xs font-semibold text-[var(--selected-control-fg)]"
+                >
+                  {note ? "Save note" : "Add note"}
+                </button>
+              </form>
             ) : null}
           </div>
-        ) : null}
-        {groupView === "done" && snoozedUntil ? (
-          <div className="inline-flex h-8 items-center gap-1.5 rounded-md bg-sky-500/10 px-2.5 text-xs font-medium text-[var(--info-text)] ring-1 ring-sky-500/20">
-            <Clock3 className="size-3" />
-            {dateTimeLabel("Snoozed until", snoozedUntil, timeZone)}
-          </div>
-        ) : null}
-        <form
-          action={updateStatus}
-          onSubmit={(event) => onStatusSubmit(event, item.id)}
-        >
-          <input
-            type="hidden"
-            name="status"
-            value={groupView === "done" ? "active" : "done"}
-          />
-          <input type="hidden" name="inboxItemId" value={item.id} />
-          <button
-            type="submit"
-            className="relative z-30 inline-flex h-8 items-center gap-1.5 rounded-md border border-foreground/10 bg-[var(--selected-control-bg)] px-2.5 text-xs font-semibold text-[var(--selected-control-fg)] shadow-sm hover:opacity-90 disabled:opacity-60"
-            disabled={isExiting}
-          >
-            {groupView === "done" ? (
-              <RotateCcw className="size-3" />
-            ) : (
-              <Check className="size-3" />
-            )}
-            {groupView === "done" ? "Active" : "Done"}
-          </button>
-        </form>
-      </div>
-      {timeline.length ? (
-        <div className="min-w-0 overflow-hidden pt-1 md:col-span-2">
-          <div
-            className={`flex items-center gap-x-1 gap-y-1.5 text-[11px] ${
-              isTimelineExpanded
-                ? "flex-wrap"
-                : "min-w-0 flex-nowrap overflow-hidden"
-            }`}
-          >
-            {previousTimelineCount > 0 || isTimelineExpanded ? (
+          {groupView === "active" ? (
+            <form action={promoteToShipIt} onSubmit={onShipItSubmit}>
+              <input type="hidden" name="inboxItemId" value={item.id} />
+              <input
+                type="hidden"
+                name="promoted"
+                value={shipItPromoted ? "false" : "true"}
+              />
+              <button
+                type="submit"
+                className={`relative z-30 inline-flex h-8 w-8 items-center justify-center rounded-md border text-xs font-semibold shadow-sm disabled:opacity-60 ${
+                  shipItPromoted
+                    ? "border-emerald-500/30 bg-emerald-500/15 text-[var(--success-text)] ring-1 ring-emerald-500/25"
+                    : "border-foreground/12 bg-background/85"
+                }`}
+                disabled={isExiting}
+                aria-label={shipItPromoted ? "Unship" : "Ship It"}
+                aria-pressed={shipItPromoted}
+                title={shipItPromoted ? "Unship" : "Ship It"}
+              >
+                <Rocket className="size-3" />
+              </button>
+            </form>
+          ) : null}
+          {groupView === "active" ? (
+            <div className="relative">
               <button
                 type="button"
-                className="pill-info inline-flex h-7 shrink-0 items-center rounded-md px-2.5 text-[11px] font-semibold text-[var(--info-text)]"
-                onClick={() => onToggleTimeline(item.id)}
+                className="relative z-30 inline-flex h-8 items-center gap-1 rounded-md border border-foreground/12 bg-background/85 px-2.5 text-xs font-semibold shadow-sm disabled:opacity-60"
+                disabled={isExiting}
+                aria-expanded={isSnoozeOpen}
+                aria-label="Snooze"
+                title="Snooze"
+                onClick={() => onToggleSnooze(item.id)}
               >
-                {isTimelineExpanded
-                  ? "Show less"
-                  : `${previousTimelineCount} previous`}
-                <ChevronDown
-                  className={`ml-1 size-3 text-foreground/45 transition ${
-                    isTimelineExpanded ? "rotate-180" : ""
-                  }`}
-                />
+                <Clock3 className="size-3" />
+                <ChevronDown className="size-3 text-foreground/45" />
               </button>
-            ) : null}
-            {visibleTimeline.map((item, index) => (
-              <span
-                key={`${item.order ?? item.occurredAt}-${item.kind}-${item.actorLogin ?? ""}`}
-                className="inline-flex min-w-0 items-center gap-0.5"
-              >
-                {index > 0 || previousTimelineCount > 0 ? (
-                  <ChevronRight className="size-2.5 shrink-0 text-foreground/30" />
-                ) : null}
-                <span
-                  className={`inline-flex h-7 min-w-0 items-center gap-1.5 rounded-md px-2.5 font-semibold ${timelineStyle(item.kind)}`}
-                >
-                  <TimelineIcon kind={item.kind} />
-                  <span className="truncate">{timelineLabel(item)}</span>
-                </span>
-              </span>
-            ))}
-          </div>
-        </div>
-      ) : null}
-      {note ? (
-        <form
-          action={setUserNote}
-          onSubmit={onRemoveNoteSubmit}
-          className="flex max-w-2xl items-start gap-2 rounded-md bg-sky-500/10 px-3 py-2 text-sm font-medium text-[var(--info-text)] ring-1 ring-sky-500/20 md:col-span-2"
-        >
-          <input type="hidden" name="inboxItemId" value={item.id} />
-          <input type="hidden" name="note" value="" />
-          <StickyNote className="mt-0.5 size-4 shrink-0" />
-          <span className="min-w-0 flex-1 break-words">{note}</span>
-          <button
-            type="submit"
-            className="mt-0.5 grid size-4 shrink-0 place-items-center rounded border border-sky-500/40 bg-background/40 text-[var(--info-text)] transition hover:bg-sky-500/15"
-            aria-label="Mark note done"
+              {isSnoozeOpen ? (
+                <div className="absolute right-0 top-9 z-40 w-36 overflow-hidden rounded-lg border border-foreground/10 bg-background shadow-xl">
+                  {snoozeOptions.map((option) => (
+                    <form
+                      key={option.value}
+                      action={snoozeItem}
+                      onSubmit={(event) => onSnoozeSubmit(event, item.id)}
+                    >
+                      <input type="hidden" name="inboxItemId" value={item.id} />
+                      <input
+                        type="hidden"
+                        name="duration"
+                        value={option.value}
+                      />
+                      <button
+                        type="submit"
+                        className="flex h-9 w-full items-center gap-2 px-3 text-left text-xs font-medium"
+                      >
+                        <Clock3 className="size-3.5 text-foreground/45" />
+                        {option.label}
+                      </button>
+                    </form>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+          {groupView === "done" && snoozedUntil ? (
+            <div className="inline-flex h-8 items-center gap-1.5 rounded-md bg-sky-500/10 px-2.5 text-xs font-medium text-[var(--info-text)] ring-1 ring-sky-500/20">
+              <Clock3 className="size-3" />
+              {dateTimeLabel("Snoozed until", snoozedUntil, timeZone)}
+            </div>
+          ) : null}
+          <form
+            action={updateStatus}
+            onSubmit={(event) => onStatusSubmit(event, item.id)}
           >
-            <Check className="size-3" />
-          </button>
-        </form>
-      ) : null}
+            <input
+              type="hidden"
+              name="status"
+              value={groupView === "done" ? "active" : "done"}
+            />
+            <input type="hidden" name="inboxItemId" value={item.id} />
+            <button
+              type="submit"
+              className="relative z-30 inline-flex h-8 items-center gap-1.5 rounded-md border border-foreground/10 bg-[var(--selected-control-bg)] px-2.5 text-xs font-semibold text-[var(--selected-control-fg)] shadow-sm hover:opacity-90 disabled:opacity-60"
+              disabled={isExiting}
+            >
+              {groupView === "done" ? (
+                <RotateCcw className="size-3" />
+              ) : (
+                <Check className="size-3" />
+              )}
+              {groupView === "done" ? "Active" : "Done"}
+            </button>
+          </form>
+        </div>
+        <dl
+          aria-label="Pull request status"
+          className="grid grid-cols-2 overflow-hidden rounded-lg border border-foreground/10 bg-background/35"
+        >
+          <div className="min-w-0 border-r border-foreground/10 p-3">
+            <dt className="text-xs font-medium text-foreground/50">Checks</dt>
+            <dd
+              className={`mt-1.5 inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-semibold ring-1 ${checkStyles[state]}`}
+            >
+              <ChecksIcon state={state} />
+              {checksLabel(status, state)}
+            </dd>
+          </div>
+          <div className="min-w-0 p-3">
+            <dt className="text-xs font-medium text-foreground/50">Review</dt>
+            <dd
+              className={`mt-1.5 inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-semibold ring-1 ${review.style}`}
+            >
+              <span className="shrink-0">{review.icon}</span>
+              {review.label}
+            </dd>
+            {review.reviewers ? (
+              <dd className="mt-2 break-words text-xs text-foreground/55">
+                {review.reviewers}
+              </dd>
+            ) : null}
+          </div>
+        </dl>
+      </div>
     </article>
   );
 }

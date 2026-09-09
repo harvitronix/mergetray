@@ -16,7 +16,7 @@ import type {
 import type { InboxRow } from "@/lib/models";
 import { InboxRowCard } from "./inbox-row-card";
 
-type SectionView = "active" | "done";
+export type SectionView = "active" | "snoozed" | "done";
 type InboxItemId = InboxRow["item"]["id"];
 
 const sectionIcons: Partial<Record<InboxGroupId, typeof Rocket>> = {
@@ -31,8 +31,13 @@ export function isDone(row: InboxRow) {
   return row.item.state !== "open" || row.userState?.status === "done";
 }
 
+export function inboxRowView(row: InboxRow): SectionView {
+  if (row.userState?.snoozedUntil) return "snoozed";
+  return isDone(row) ? "done" : "active";
+}
+
 function sectionViewLabel(view: SectionView) {
-  return view === "done" ? "handled" : "active";
+  return view === "done" ? "handled" : view;
 }
 
 type InboxSectionProps = {
@@ -108,8 +113,8 @@ export function InboxSection({
     (row) => row.userState?.snoozedUntil,
   ).length;
   const handledCount = doneRows.length - snoozedCount;
-  const sectionRows = (groupView === "done" ? doneRows : activeRows).filter(
-    (row) => !hiddenRows[row.item.id],
+  const sectionRows = rows.filter(
+    (row) => inboxRowView(row) === groupView && !hiddenRows[row.item.id],
   );
   const allSectionRowsSelected =
     sectionRows.length > 0 &&
@@ -151,7 +156,7 @@ export function InboxSection({
               key={row.item.id}
               row={row}
               sectionId={section.id}
-              groupView={groupView}
+              groupView={groupView === "active" ? "active" : "done"}
               stackOrdinal={stackOrdinals.get(row.item.id)}
               now={now}
               timeZone={timeZone}

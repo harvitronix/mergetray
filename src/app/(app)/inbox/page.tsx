@@ -27,7 +27,8 @@ export default async function InboxPage({
   }>;
 }) {
   const query = await searchParams;
-  const view = query.view === "done" ? "done" : "active";
+  const view =
+    query.view === "done" || query.view === "snoozed" ? query.view : "active";
   const savedLayout = (await cookies()).get(inboxLayoutCookieName)?.value;
   const layout = inboxLayout(query.layout ?? savedLayout);
   const selectedAuthor = query.author?.replace(/^github:/, "") || undefined;
@@ -101,7 +102,7 @@ export default async function InboxPage({
   return (
     <AppPage>
       <InboxTable
-        key={`${layout}-${view}-${repositoryId ?? "all"}-${selectedAuthor ?? "all"}`}
+        key={`${layout}-${repositoryId ?? "all"}-${selectedAuthor ?? "all"}`}
         rows={inbox}
         view={view}
         initialLayout={layout}
