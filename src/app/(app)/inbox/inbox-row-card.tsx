@@ -513,7 +513,7 @@ export function InboxRowCard({
                     <ChevronRight className="size-2.5 shrink-0 text-foreground/30" />
                   ) : null}
                   <span
-                    className={`inline-flex h-7 min-w-0 items-center gap-1.5 rounded-md px-2.5 font-semibold ${timelineStyle(item.kind)}`}
+                    className={`inline-flex h-7 min-w-0 items-center gap-1.5 rounded-md px-1 font-semibold ${timelineStyle(item.kind)}`}
                   >
                     <TimelineIcon kind={item.kind} />
                     <span className="truncate">{timelineLabel(item)}</span>
