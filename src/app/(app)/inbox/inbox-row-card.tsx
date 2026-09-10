@@ -28,14 +28,12 @@ import type { FormEvent } from "react";
 import { useEffect, useRef } from "react";
 import { codexSessionUrl } from "@/lib/codex-links";
 import {
-  hasOpenBotChangeRequest,
   hasOpenChangeRequest,
-  hasUnansweredHumanComment,
   type InboxGroupId,
-  inboxRuleStaleThresholdMs,
   inboxSectionDefinitions,
   isBot,
   isPromotedToShipIt,
+  nextInboxAction,
 } from "@/lib/inbox-section-rules";
 import type { InboxRow, InboxTimelineItem } from "@/lib/models";
 import { snoozeOptions } from "./inbox-snooze";
@@ -127,7 +125,7 @@ type InboxRowCardProps = {
 
 function checkState(value: string | undefined): CheckState {
   if (value === "success") return "passing";
-  if (value === "failure") return "failing";
+  if (value === "failure" || value === "error") return "failing";
   if (value === "pending") return "pending";
   return "unknown";
 }
@@ -243,35 +241,6 @@ function timelineLabel(item: InboxTimelineItem) {
   }
 }
 
-function dayCountLabel(value: number) {
-  const days = Math.max(1, Math.floor(value / (24 * 60 * 60 * 1000)));
-  return `${days} ${days === 1 ? "day" : "days"}`;
-}
-
-function readyForActionLabel(row: InboxRow, now: number) {
-  if (row.isReviewRequestedFromViewer && !hasOpenBotChangeRequest(row)) {
-    return "Review requested from you";
-  }
-  if (row.isAuthoredByViewer && hasOpenChangeRequest(row)) {
-    return "Changes requested";
-  }
-  if (hasUnansweredHumanComment(row)) {
-    return "Unanswered human comment";
-  }
-  if (row.priorityReason === "changes_after_your_review") {
-    return "Commits after your review";
-  }
-  if (row.priorityReason === "stale_without_human_review") {
-    const openedAt = row.timeline.find(
-      (item) => item.kind === "opened",
-    )?.occurredAt;
-    return `${dayCountLabel(now - (openedAt ?? row.item.updatedAt))} without human review`;
-  }
-  if (now - row.item.updatedAt > inboxRuleStaleThresholdMs) {
-    return `${dayCountLabel(now - row.item.updatedAt)} without activity`;
-  }
-}
-
 function reviewBadge(row: InboxRow) {
   const humanApprovals = row.approvals.filter(
     (approval) => !isBot(approval.githubLogin),
@@ -346,13 +315,9 @@ export function InboxRowCard({
 }: InboxRowCardProps) {
   const { item, pullRequestDetails, repository, status, timeline } = row;
   const state = checkState(status?.rollupState);
-  const actionReason =
-    sectionId === "ready_for_action"
-      ? readyForActionLabel(row, now)
-      : undefined;
+  const nextAction = nextInboxAction(row, now);
   const itemIdentifier = `${repository.fullName}#${item.number}`;
   const review = reviewBadge(row);
-  const showActionReason = actionReason && actionReason !== review.label;
   const visibleTimeline =
     !isTimelineExpanded && timeline.length > timelinePreviewCount
       ? timeline.slice(-timelinePreviewCount)
@@ -451,92 +416,39 @@ export function InboxRowCard({
             />
           ) : null}
           <div className="grid min-w-0 flex-1 gap-2.5">
-            <div className="flex min-w-0 flex-col gap-2 lg:flex-row lg:items-start lg:justify-between lg:gap-4">
-              <div className="min-w-0 flex-1">
-                {visuallyIndicated ||
-                pullRequestDetails.autoMergeEnabled ||
-                showActionReason ||
-                (groupView === "done" && snoozedUntil) ? (
-                  <div className="mb-1 flex flex-wrap items-center gap-1.5">
-                    {visuallyIndicated ? (
-                      <span
-                        className={`inline-flex h-5 items-center gap-1.5 rounded px-2 text-[11px] font-semibold ring-1 ${sectionIndicator.badge}`}
-                      >
-                        <span
-                          className={`size-1.5 rounded-full ${sectionIndicator.rail}`}
-                        />
-                        {sectionLabels[sectionId]}
-                      </span>
-                    ) : null}
-                    {pullRequestDetails.autoMergeEnabled ? (
-                      <span className="inline-flex h-5 items-center gap-1 rounded bg-fuchsia-600 px-2 text-[11px] font-semibold text-white">
-                        <Rocket className="size-3" />
-                        Auto-merge on
-                      </span>
-                    ) : null}
-                    {showActionReason ? (
-                      <span className="pill-warning inline-flex h-5 items-center gap-1.5 rounded px-2 text-[11px] font-semibold text-[var(--warning-text)] ring-1 ring-amber-500/20">
-                        <span className="size-1.5 rounded-full bg-amber-500" />
-                        {actionReason}
-                      </span>
-                    ) : null}
-                    {groupView === "done" && snoozedUntil ? (
-                      <span className="inline-flex h-5 items-center gap-1 rounded bg-sky-500/10 px-2 text-[11px] font-semibold text-[var(--info-text)] ring-1 ring-sky-500/20">
-                        <Clock3 className="size-3" />
-                        {snoozedUntilLabel(snoozedUntil, now, timeZone)}
-                      </span>
-                    ) : null}
-                  </div>
+            <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+                {visuallyIndicated ? (
+                  <span
+                    className={`inline-flex h-5 items-center gap-1.5 rounded px-2 text-[11px] font-semibold ring-1 ${sectionIndicator.badge}`}
+                  >
+                    <span
+                      className={`size-1.5 rounded-full ${sectionIndicator.rail}`}
+                    />
+                    {sectionLabels[sectionId]}
+                  </span>
                 ) : null}
-                <a
-                  href={item.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  title={item.title}
-                  className="block truncate text-[17px] font-semibold leading-6 tracking-[-0.01em] hover:underline"
+                {pullRequestDetails.autoMergeEnabled ? (
+                  <span className="inline-flex h-5 items-center gap-1 rounded bg-fuchsia-600 px-2 text-[11px] font-semibold text-white">
+                    <Rocket className="size-3" />
+                    Auto-merge on
+                  </span>
+                ) : null}
+                <span
+                  className={`inline-flex min-h-5 items-center gap-1.5 rounded px-2 text-[11px] font-semibold ring-1 ${sectionIndicator.badge}`}
                 >
-                  {item.title}
-                </a>
-                <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-[13px] leading-5 text-foreground/55">
-                  <span className="whitespace-nowrap">
-                    {dateTimeLabel("Updated", item.updatedAt, timeZone)}
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 whitespace-nowrap font-medium">
-                    {hasChangeCounts ? (
-                      <span className="inline-flex items-center gap-1.5 font-mono tabular-nums">
-                        <span className="text-[var(--success-text)]">
-                          +{pullRequestDetails.additions}
-                        </span>
-                        <span className="text-[var(--danger-text)]">
-                          −{pullRequestDetails.deletions}
-                        </span>
-                      </span>
-                    ) : (
-                      <span>Changes unknown</span>
-                    )}
-                  </span>
-                  {pullRequestDetails.changedFiles !== undefined ? (
-                    <span className="tabular-nums text-foreground/70">
-                      {pullRequestDetails.changedFiles}{" "}
-                      {pullRequestDetails.changedFiles === 1 ? "file" : "files"}
-                    </span>
-                  ) : null}
-                </div>
-                <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-5 gap-y-1 text-[13px] leading-5">
                   <span
-                    className={`inline-flex items-center gap-1.5 font-medium ${checkStyles[state]}`}
-                  >
-                    <ChecksIcon state={state} />
-                    {checksLabel(status, state)}
+                    className={`size-1.5 shrink-0 rounded-full ${sectionIndicator.rail}`}
+                  />
+                  <span className="sr-only">Next step: </span>
+                  {nextAction}
+                </span>
+                {groupView === "done" && snoozedUntil ? (
+                  <span className="inline-flex h-5 items-center gap-1 rounded bg-sky-500/10 px-2 text-[11px] font-semibold text-[var(--info-text)] ring-1 ring-sky-500/20">
+                    <Clock3 className="size-3" />
+                    {snoozedUntilLabel(snoozedUntil, now, timeZone)}
                   </span>
-                  <span
-                    className={`inline-flex min-w-0 items-center gap-1.5 font-medium ${review.style}`}
-                    title={review.reviewers}
-                  >
-                    <span className="shrink-0">{review.icon}</span>
-                    <span className="truncate">{review.label}</span>
-                  </span>
-                </div>
+                ) : null}
               </div>
               <div
                 ref={snoozeMenuRef}
@@ -670,6 +582,57 @@ export function InboxRowCard({
                     {groupView === "done" ? "Active" : "Done"}
                   </button>
                 </form>
+              </div>
+            </div>
+            <div className="min-w-0">
+              <a
+                href={item.url}
+                target="_blank"
+                rel="noreferrer"
+                title={item.title}
+                className="block truncate text-[17px] font-semibold leading-6 tracking-[-0.01em] hover:underline"
+              >
+                {item.title}
+              </a>
+              <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-[13px] leading-5 text-foreground/55">
+                <span className="whitespace-nowrap">
+                  {dateTimeLabel("Updated", item.updatedAt, timeZone)}
+                </span>
+                <span className="inline-flex items-center gap-1.5 whitespace-nowrap font-medium">
+                  {hasChangeCounts ? (
+                    <span className="inline-flex items-center gap-1.5 font-mono tabular-nums">
+                      <span className="text-[var(--success-text)]">
+                        +{pullRequestDetails.additions}
+                      </span>
+                      <span className="text-[var(--danger-text)]">
+                        −{pullRequestDetails.deletions}
+                      </span>
+                    </span>
+                  ) : (
+                    <span>Changes unknown</span>
+                  )}
+                </span>
+                {pullRequestDetails.changedFiles !== undefined ? (
+                  <span className="tabular-nums text-foreground/70">
+                    {pullRequestDetails.changedFiles}{" "}
+                    {pullRequestDetails.changedFiles === 1 ? "file" : "files"}
+                  </span>
+                ) : null}
+              </div>
+              <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-5 gap-y-1 text-[13px] leading-5">
+                <span
+                  className={`inline-flex items-center gap-1.5 font-medium ${checkStyles[state]}`}
+                >
+                  <ChecksIcon state={state} />
+                  {checksLabel(status, state)}
+                </span>
+                <span
+                  className={`inline-flex min-w-0 items-center gap-1.5 font-medium ${review.style}`}
+                  title={review.reviewers}
+                >
+                  <span className="shrink-0">{review.icon}</span>
+                  <span className="truncate">{review.label}</span>
+                </span>
               </div>
             </div>
             {timeline.length ? (
