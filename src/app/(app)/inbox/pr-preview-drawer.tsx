@@ -99,6 +99,12 @@ function changesLabel(row: InboxRow) {
   return `+${details.additions} / -${details.deletions}${files}`;
 }
 
+function reviewableChangesLabel(row: InboxRow) {
+  const details = row.pullRequestDetails.reviewableDiff;
+  if (!details?.excludedFiles) return undefined;
+  return `Reviewable +${details.additions} / -${details.deletions} · ${details.changedFiles} ${details.changedFiles === 1 ? "file" : "files"}`;
+}
+
 export function PrPreviewDrawer({
   row,
   timeZone,
@@ -113,6 +119,7 @@ export function PrPreviewDrawer({
   const dialogRef = useRef<HTMLDialogElement>(null);
   const submittedReviews = reviewers(row.timeline);
   const status = row.status;
+  const reviewableChanges = reviewableChangesLabel(row);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -181,8 +188,17 @@ export function PrPreviewDrawer({
               </span>
             </span>
             <span className="pill-muted inline-flex h-7 items-center rounded-full border border-foreground/10 px-2.5 font-mono">
+              {reviewableChanges ? "GitHub " : ""}
               {changesLabel(row)}
             </span>
+            {reviewableChanges ? (
+              <span
+                className="pill-info inline-flex h-7 items-center rounded-full border border-foreground/10 px-2.5 font-mono text-[var(--info-text)]"
+                title={`${row.pullRequestDetails.reviewableDiff?.excludedFiles} ${row.pullRequestDetails.reviewableDiff?.excludedFiles === 1 ? "file" : "files"} excluded`}
+              >
+                {reviewableChanges}
+              </span>
+            ) : null}
             <a
               href={row.item.url}
               target="_blank"

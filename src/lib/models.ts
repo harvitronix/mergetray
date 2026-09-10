@@ -38,6 +38,12 @@ export type PullRequestDetails = {
   baseRef: string;
   mergedAt?: number;
   autoMergeEnabled: boolean;
+  reviewableDiff?: {
+    additions: number;
+    deletions: number;
+    changedFiles: number;
+    excludedFiles: number;
+  };
 };
 
 export type PullRequestStatus = {

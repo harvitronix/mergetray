@@ -1,6 +1,7 @@
 import {
   Bot,
   ExternalLink,
+  FileX2,
   GitBranch,
   HardDrive,
   Terminal,
@@ -20,6 +21,10 @@ import {
   setRepositoryLocalPath,
 } from "@/lib/codex-worktrees";
 import { setSetting, setting } from "@/lib/database";
+import {
+  diffFileFilters,
+  diffFileFiltersSetting,
+} from "@/lib/diff-file-filters";
 import { githubAuthStatus } from "@/lib/github-auth";
 import { githubSyncState, syncGithub } from "@/lib/github-sync";
 import { githubIdentityConfigured, listRepositories } from "@/lib/inbox-store";
@@ -36,6 +41,7 @@ export default async function SettingsPage({
     syncFailed?: string;
     synced?: string;
     codexUpdated?: string;
+    diffFiltersUpdated?: string;
     repositoryPathUpdated?: string;
     repositoryPathError?: string;
     worktreeCleaned?: string;
@@ -74,6 +80,18 @@ export default async function SettingsPage({
     );
     revalidatePath("/", "layout");
     redirect("/settings?codexUpdated=1");
+  }
+
+  async function updateDiffFileFilters(formData: FormData) {
+    "use server";
+
+    const filters = diffFileFilters(String(formData.get("filters") ?? ""));
+    setSetting(
+      diffFileFiltersSetting,
+      filters.length ? filters.join("\n") : undefined,
+    );
+    revalidatePath("/", "layout");
+    redirect("/settings?diffFiltersUpdated=1");
   }
 
   async function updateRepositoryPath(formData: FormData) {
@@ -131,6 +149,56 @@ export default async function SettingsPage({
       ) : null}
 
       <ThemeSettingsForm initialTheme={theme} />
+
+      <Surface className="mt-4 p-5">
+        <div className="flex items-center gap-3">
+          <Surface
+            as="span"
+            variant="inset"
+            className="grid size-10 place-items-center"
+          >
+            <FileX2 className="size-5" />
+          </Surface>
+          <div>
+            <h2 className="text-lg font-semibold">Diff file filters</h2>
+            <p className="text-sm text-foreground/55">
+              Exclude generated files and tests from the reviewable change
+              count. GitHub totals stay visible.
+            </p>
+          </div>
+        </div>
+
+        {query.diffFiltersUpdated ? (
+          <Notice tone="success" className="mt-5">
+            Diff file filters saved.
+          </Notice>
+        ) : null}
+
+        <form action={updateDiffFileFilters} className="mt-5">
+          <label className="grid gap-2 text-sm font-medium">
+            Excluded file patterns
+            <textarea
+              name="filters"
+              defaultValue={setting(diffFileFiltersSetting)}
+              rows={6}
+              placeholder={"**/__generated__/**\n*.generated.ts\n*.test.*"}
+              className="min-h-32 resize-y rounded-md border border-foreground/10 bg-background px-3 py-2 font-mono text-sm"
+            />
+          </label>
+          <p className="mt-2 text-xs text-foreground/50">
+            Enter one glob per line. Patterns without a slash match file names
+            in any folder. Use ** to match across folders. New file data appears
+            after the next GitHub sync.
+          </p>
+          <button
+            type="submit"
+            className="mt-3 h-9 rounded-md bg-[var(--selected-control-bg)] px-3 text-xs font-semibold text-[var(--selected-control-fg)]"
+          >
+            Save filters
+          </button>
+        </form>
+      </Surface>
+
       <SectionRulesSettings />
 
       <Surface className="mt-4 p-5">

@@ -18,6 +18,12 @@ export type GitHubPullRequest = {
   changed_files?: number;
 };
 
+export type GitHubPullRequestFile = {
+  filename: string;
+  additions: number;
+  deletions: number;
+};
+
 export type GitHubReview = {
   state: string;
   submitted_at: string | null;

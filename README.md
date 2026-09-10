@@ -17,6 +17,8 @@ quickly, across all your repositories, so you can deploy faster.
 - See dependent PRs together in stacks.
 - See branch, change, check, review, and activity details without opening each
   PR on GitHub.
+- Compare GitHub's change totals with reviewable totals that omit configured
+  file patterns.
 - Add notes to PRs.
 - Apply Ship It, snooze, and done actions to one or several PRs.
 - See the latest 25 merged PRs and filter them by repository.
@@ -103,6 +105,11 @@ MergeTray's normal polling only reads from GitHub. Optional webhook forwarding
 installs the `cli/gh-webhook` GitHub CLI extension when needed and creates
 repository or organization webhook configuration through GitHub's forwarding
 service. All application data is stored locally in the SQLite database.
+
+Configure diff file filters in Settings to exclude generated files, tests, or
+other paths from reviewable additions, deletions, and file counts. MergeTray
+keeps GitHub's original totals visible and calculates reviewable totals from
+the stored per-file data when it loads the inbox.
 
 ## GitHub access and scopes
 
