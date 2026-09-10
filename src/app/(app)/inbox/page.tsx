@@ -14,6 +14,7 @@ import {
   setUserStatus,
   snoozeInboxItem,
 } from "@/lib/inbox-store";
+import { slopModeEnabled } from "@/lib/slop-mode";
 import { InboxTable } from "./inbox-table";
 
 export default async function InboxPage({
@@ -115,6 +116,7 @@ export default async function InboxPage({
         }
         localGithubIdentityConfigured={githubIdentityConfigured()}
         codexEnabled={codexEnabled}
+        slopModeEnabled={slopModeEnabled()}
         syncError={syncError}
         updateStatus={updateStatus}
         snoozeItem={snoozeItem}

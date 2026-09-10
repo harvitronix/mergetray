@@ -28,6 +28,7 @@ import {
 import { githubAuthStatus } from "@/lib/github-auth";
 import { githubSyncState, syncGithub } from "@/lib/github-sync";
 import { githubIdentityConfigured, listRepositories } from "@/lib/inbox-store";
+import { slopModeEnabled, slopModeSetting } from "@/lib/slop-mode";
 import { appTheme, themeCookieName } from "@/lib/theme";
 import { CleanupWorktreeButton } from "./cleanup-worktree-button";
 import { SectionRulesSettings } from "./section-rules-settings";
@@ -42,6 +43,7 @@ export default async function SettingsPage({
     synced?: string;
     codexUpdated?: string;
     diffFiltersUpdated?: string;
+    slopModeUpdated?: string;
     repositoryPathUpdated?: string;
     repositoryPathError?: string;
     worktreeCleaned?: string;
@@ -56,6 +58,7 @@ export default async function SettingsPage({
     codexCliVersion(),
   ]);
   const codexEnabled = codexIntegrationEnabled();
+  const slopMode = slopModeEnabled();
   const managedWorktrees = await listCodexManagedWorktrees();
   const syncState = githubSyncState();
 
@@ -92,6 +95,17 @@ export default async function SettingsPage({
     );
     revalidatePath("/", "layout");
     redirect("/settings?diffFiltersUpdated=1");
+  }
+
+  async function updateSlopMode(formData: FormData) {
+    "use server";
+
+    setSetting(
+      slopModeSetting,
+      formData.get("enabled") === "true" ? "true" : undefined,
+    );
+    revalidatePath("/", "layout");
+    redirect("/settings?slopModeUpdated=1");
   }
 
   async function updateRepositoryPath(formData: FormData) {
@@ -197,6 +211,33 @@ export default async function SettingsPage({
             Save filters
           </button>
         </form>
+      </Surface>
+
+      <Surface className="mt-4 p-5">
+        <h2 className="text-lg font-semibold">Slop mode</h2>
+        <p className="mt-2 text-sm text-foreground/55">
+          Replaces the Done and Snooze mascot with a burst of AI slop.
+        </p>
+        {query.slopModeUpdated ? (
+          <Notice tone="success" className="mt-5">
+            Slop mode {slopMode ? "enabled" : "disabled"}.
+          </Notice>
+        ) : null}
+        <Surface variant="inset" className="mt-5 px-3 py-3 text-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="font-medium">{slopMode ? "Enabled" : "Disabled"}</p>
+            <form action={updateSlopMode}>
+              <button
+                type="submit"
+                name="enabled"
+                value={String(!slopMode)}
+                className="inline-flex h-9 items-center rounded-md bg-[var(--selected-control-bg)] px-3 text-xs font-semibold text-[var(--selected-control-fg)]"
+              >
+                {slopMode ? "Disable slop mode" : "Enable slop mode"}
+              </button>
+            </form>
+          </div>
+        </Surface>
       </Surface>
 
       <SectionRulesSettings />

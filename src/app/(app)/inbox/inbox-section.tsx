@@ -52,6 +52,7 @@ type InboxSectionProps = {
   now: number;
   timeZone: string;
   selectionEnabled: boolean;
+  slopModeEnabled: boolean;
   selectedRowIds: ReadonlySet<InboxItemId>;
   stackOrdinals: ReadonlyMap<InboxItemId, { position: number; total: number }>;
   updateStatus: (formData: FormData) => void | Promise<void>;
@@ -89,6 +90,7 @@ export function InboxSection({
   now,
   timeZone,
   selectionEnabled,
+  slopModeEnabled,
   selectedRowIds,
   stackOrdinals,
   updateStatus,
@@ -162,6 +164,7 @@ export function InboxSection({
               timeZone={timeZone}
               isTimelineExpanded={expandedRows[row.item.id] ?? false}
               selectionEnabled={selectionEnabled}
+              slopModeEnabled={slopModeEnabled}
               isSelected={selectedRowIds.has(row.item.id)}
               exitKind={
                 groupView === "active" ? exitingRows[row.item.id] : undefined

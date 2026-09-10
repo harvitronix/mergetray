@@ -64,6 +64,7 @@ export function InboxTable({
   selectedRepository,
   localGithubIdentityConfigured,
   codexEnabled,
+  slopModeEnabled,
   syncError,
   updateStatus,
   snoozeItem,
@@ -78,6 +79,7 @@ export function InboxTable({
   selectedRepository?: { fullName: string };
   localGithubIdentityConfigured: boolean;
   codexEnabled: boolean;
+  slopModeEnabled: boolean;
   syncError?: string;
   updateStatus: (formData: FormData) => void | Promise<void>;
   snoozeItem: (formData: FormData) => void | Promise<void>;
@@ -431,6 +433,7 @@ export function InboxTable({
               now={now}
               timeZone={timeZone}
               selectionEnabled={isSelectionMode}
+              slopModeEnabled={slopModeEnabled}
               selectedRowIds={selectedRowIds}
               stackOrdinals={stackOrdinals}
               updateStatus={updateStatus}
@@ -508,6 +511,7 @@ export function InboxTable({
                             expandedRows[row.item.id] ?? false
                           }
                           selectionEnabled={isSelectionMode}
+                          slopModeEnabled={slopModeEnabled}
                           isSelected={selectedRowIds.has(row.item.id)}
                           exitKind={
                             inboxView === "active"
