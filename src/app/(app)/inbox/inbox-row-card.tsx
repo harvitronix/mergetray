@@ -336,6 +336,7 @@ export function InboxRowCard({
   const hasChangeCounts =
     pullRequestDetails.additions !== undefined &&
     pullRequestDetails.deletions !== undefined;
+  const reviewable = pullRequestDetails.reviewableDiff;
 
   useEffect(() => {
     if (isNoteOpen) noteInputRef.current?.focus();
@@ -599,6 +600,9 @@ export function InboxRowCard({
                   {dateTimeLabel("Updated", item.updatedAt, timeZone)}
                 </span>
                 <span className="inline-flex items-center gap-1.5 whitespace-nowrap font-medium">
+                  {reviewable?.excludedFiles ? (
+                    <span className="text-foreground/45">GitHub</span>
+                  ) : null}
                   {hasChangeCounts ? (
                     <span className="inline-flex items-center gap-1.5 font-mono tabular-nums">
                       <span className="text-[var(--success-text)]">
@@ -616,6 +620,26 @@ export function InboxRowCard({
                   <span className="tabular-nums text-foreground/70">
                     {pullRequestDetails.changedFiles}{" "}
                     {pullRequestDetails.changedFiles === 1 ? "file" : "files"}
+                  </span>
+                ) : null}
+                {reviewable?.excludedFiles ? (
+                  <span
+                    className="inline-flex items-center gap-1.5 whitespace-nowrap font-medium"
+                    title={`${reviewable.excludedFiles} ${reviewable.excludedFiles === 1 ? "file" : "files"} excluded`}
+                  >
+                    <span className="text-foreground/45">Reviewable</span>
+                    <span className="inline-flex items-center gap-1.5 font-mono tabular-nums">
+                      <span className="text-[var(--success-text)]">
+                        +{reviewable.additions}
+                      </span>
+                      <span className="text-[var(--danger-text)]">
+                        −{reviewable.deletions}
+                      </span>
+                    </span>
+                    <span className="tabular-nums text-foreground/70">
+                      {reviewable.changedFiles}{" "}
+                      {reviewable.changedFiles === 1 ? "file" : "files"}
+                    </span>
                   </span>
                 ) : null}
               </div>

@@ -4,6 +4,7 @@ import {
   approvedReviewers,
   type GitHubCommit,
   type GitHubPullRequest,
+  type GitHubPullRequestFile,
   type GitHubReview,
   type GitHubTimelineEvent,
   prState,
@@ -188,7 +189,7 @@ async function cachedPages<T>(client: GithubClient, key: string, path: string) {
 function storedItem(repositoryId: string, number: number) {
   return getDatabase()
     .prepare(
-      `SELECT i.*, d.head_sha FROM inbox_items i
+      `SELECT i.*, d.head_sha, d.files_synced FROM inbox_items i
        LEFT JOIN pull_request_details d ON d.inbox_item_id = i.id
        WHERE i.repository_id = ? AND i.number = ?`,
     )
@@ -265,6 +266,22 @@ function replaceTimeline(
   }
 }
 
+function replacePullRequestFiles(
+  inboxItemId: string,
+  files: GitHubPullRequestFile[],
+) {
+  const db = getDatabase();
+  db.prepare("DELETE FROM pull_request_files WHERE inbox_item_id = ?").run(
+    inboxItemId,
+  );
+  const insert = db.prepare(
+    "INSERT INTO pull_request_files(inbox_item_id, filename, additions, deletions) VALUES (?, ?, ?, ?)",
+  );
+  for (const file of files) {
+    insert.run(inboxItemId, file.filename, file.additions, file.deletions);
+  }
+}
+
 async function hydratePullRequest(
   client: GithubClient,
   repository: GithubRepository,
@@ -272,7 +289,7 @@ async function hydratePullRequest(
   number: number,
 ) {
   const root = `/repos/${repository.owner.login}/${repository.name}`;
-  const [details, commits, timeline] = await Promise.all([
+  const [details, commits, timeline, files] = await Promise.all([
     client.get<GitHubPullRequest>(`${root}/pulls/${number}`),
     cachedPages<GitHubCommit>(
       client,
@@ -283,6 +300,11 @@ async function hydratePullRequest(
       client,
       `timeline:${repository.id}:${number}`,
       `${root}/issues/${number}/timeline`,
+    ),
+    cachedPages<GitHubPullRequestFile>(
+      client,
+      `files:${repository.id}:${number}`,
+      `${root}/pulls/${number}/files`,
     ),
   ]);
   const live = details;
@@ -324,13 +346,14 @@ async function hydratePullRequest(
     db.prepare(
       `INSERT INTO pull_request_details(
         inbox_item_id, draft, additions, deletions, changed_files,
-        head_sha, head_ref, base_ref, merged_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        head_sha, head_ref, base_ref, merged_at, files_synced
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(inbox_item_id) DO UPDATE SET
         draft = excluded.draft, additions = excluded.additions,
         deletions = excluded.deletions, changed_files = excluded.changed_files,
         head_sha = excluded.head_sha, head_ref = excluded.head_ref,
-        base_ref = excluded.base_ref, merged_at = excluded.merged_at`,
+        base_ref = excluded.base_ref, merged_at = excluded.merged_at,
+        files_synced = excluded.files_synced`,
     ).run(
       itemId,
       Number(Boolean(live.draft)),
@@ -341,7 +364,9 @@ async function hydratePullRequest(
       live.head.ref,
       live.base.ref,
       timestamp(live.merged_at) ?? null,
+      live.changed_files === files.length ? 1 : -1,
     );
+    replacePullRequestFiles(itemId, files);
     replaceTimeline(itemId, timelineItems(live, [], commits, timeline));
     return itemId;
   });
@@ -596,7 +621,8 @@ async function syncRepository(client: GithubClient, row: SqlRow) {
     return (
       !stored ||
       Number(stored.updated_at) !== Date.parse(pull.updated_at) ||
-      stored.head_sha !== pull.head.sha
+      stored.head_sha !== pull.head.sha ||
+      Number(stored.files_synced) === 0
     );
   });
   for (

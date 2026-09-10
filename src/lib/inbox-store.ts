@@ -1,5 +1,10 @@
 import { cache } from "react";
 import { getDatabase, id, integer, setting } from "@/lib/database";
+import {
+  diffFileFilters,
+  type PullRequestFile,
+  reviewableDiff,
+} from "@/lib/diff-file-filters";
 import { inboxRuleStaleThresholdMs, isBot } from "@/lib/inbox-section-rules";
 import type {
   InboxItem,
@@ -54,8 +59,12 @@ function item(row: SqlRow): InboxItem {
   };
 }
 
-function details(row: SqlRow): PullRequestDetails {
-  return {
+function details(
+  row: SqlRow,
+  files: PullRequestFile[] = [],
+  filters: string[] = [],
+): PullRequestDetails {
+  const value: PullRequestDetails = {
     id: id(row.id as number),
     inboxItemId: id(row.inbox_item_id as number),
     draft: Boolean(row.draft),
@@ -67,6 +76,18 @@ function details(row: SqlRow): PullRequestDetails {
     baseRef: String(row.base_ref),
     mergedAt: optionalNumber(row.merged_at),
     autoMergeEnabled: Boolean(row.auto_merge_enabled),
+  };
+  if (Number(row.files_synced) === 1) {
+    value.reviewableDiff = reviewableDiff(files, filters);
+  }
+  return value;
+}
+
+function pullRequestFile(row: SqlRow): PullRequestFile {
+  return {
+    filename: String(row.filename),
+    additions: integer(row.additions as number),
+    deletions: integer(row.deletions as number),
   };
 }
 
@@ -238,8 +259,19 @@ function loadInboxRows(repositoryId?: string): InboxRow[] {
   );
   const pullRequestDetails = rowsByInboxItem(
     db.prepare("SELECT * FROM pull_request_details").all() as SqlRow[],
-    details,
+    (row) => row,
   );
+  const filesByItem = groupedByInboxItem(
+    db
+      .prepare(
+        `SELECT f.* FROM pull_request_files f
+         JOIN inbox_items i ON i.id = f.inbox_item_id
+         WHERE i.state = 'open' AND (? IS NULL OR i.repository_id = ?)`,
+      )
+      .all(repositoryId ?? null, repositoryId ?? null) as SqlRow[],
+    pullRequestFile,
+  );
+  const filters = diffFileFilters();
   const pullRequestStatuses = rowsByInboxItem(
     db.prepare("SELECT * FROM pull_request_statuses").all() as SqlRow[],
     status,
@@ -303,7 +335,11 @@ function loadInboxRows(repositoryId?: string): InboxRow[] {
       {
         item: inboxItem,
         repository: repository(rawRepository),
-        pullRequestDetails: rawDetails,
+        pullRequestDetails: details(
+          rawDetails,
+          filesByItem.get(inboxItem.id),
+          filters,
+        ),
         status: rawStatus ?? null,
         userState: rawUserState ?? null,
         isAuthoredByViewer: authored,

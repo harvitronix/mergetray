@@ -51,7 +51,15 @@ const schema = `
     head_ref TEXT NOT NULL,
     base_ref TEXT NOT NULL,
     merged_at INTEGER,
-    auto_merge_enabled INTEGER NOT NULL DEFAULT 0
+    auto_merge_enabled INTEGER NOT NULL DEFAULT 0,
+    files_synced INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE TABLE IF NOT EXISTS pull_request_files (
+    inbox_item_id INTEGER NOT NULL REFERENCES inbox_items(id) ON DELETE CASCADE,
+    filename TEXT NOT NULL,
+    additions INTEGER NOT NULL,
+    deletions INTEGER NOT NULL,
+    PRIMARY KEY(inbox_item_id, filename)
   );
   CREATE TABLE IF NOT EXISTS pull_request_statuses (
     id INTEGER PRIMARY KEY,
@@ -166,6 +174,11 @@ export function getDatabase() {
   if (!detailColumns.some((column) => column.name === "auto_merge_enabled")) {
     database.exec(
       "ALTER TABLE pull_request_details ADD COLUMN auto_merge_enabled INTEGER NOT NULL DEFAULT 0",
+    );
+  }
+  if (!detailColumns.some((column) => column.name === "files_synced")) {
+    database.exec(
+      "ALTER TABLE pull_request_details ADD COLUMN files_synced INTEGER NOT NULL DEFAULT 0",
     );
   }
   const repositoryColumns = database

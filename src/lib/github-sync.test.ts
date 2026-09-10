@@ -84,6 +84,15 @@ beforeEach(() => {
       if (url.includes("/repos/acme/widgets/pulls/7/commits?")) {
         return Response.json([], { headers: { etag: '"commits"' } });
       }
+      if (url.includes("/repos/acme/widgets/pulls/7/files?")) {
+        return Response.json(
+          [
+            { filename: "src/app.ts", additions: 4, deletions: 1 },
+            { filename: "src/app.test.ts", additions: 0, deletions: 0 },
+          ],
+          { headers: { etag: '"files"' } },
+        );
+      }
       if (url.includes("/repos/acme/widgets/issues/7/timeline?")) {
         return Response.json([], { headers: { etag: '"timeline"' } });
       }
@@ -119,10 +128,18 @@ describe("GitHub polling", () => {
         .prepare("SELECT auto_merge_enabled FROM pull_request_details LIMIT 1")
         .get(),
     ).toEqual({ auto_merge_enabled: 1 });
+    expect(
+      getDatabase()
+        .prepare(
+          "SELECT filename, additions, deletions FROM pull_request_files ORDER BY filename",
+        )
+        .all(),
+    ).toEqual([
+      { filename: "src/app.test.ts", additions: 0, deletions: 0 },
+      { filename: "src/app.ts", additions: 4, deletions: 1 },
+    ]);
     const detailRequestsAfterFirstSync = requests.filter((url) =>
-      /pulls\/7(?:\/requested_reviewers|\/reviews|\/commits|$)|issues\/7\/timeline/.test(
-        url,
-      ),
+      /pulls\/7(?:\/commits|\/files|$)|issues\/7\/timeline/.test(url),
     ).length;
     const identityRequestsAfterFirstSync = requests.filter(
       (url) => url.endsWith("/user") || url.includes("/user/teams?"),
@@ -132,15 +149,13 @@ describe("GitHub polling", () => {
     await syncGithub(true);
 
     expect(githubDataRevision()).toBe(revisionAfterFirstSync);
-    expect(detailRequestsAfterFirstSync).toBe(3);
+    expect(detailRequestsAfterFirstSync).toBe(4);
     expect(identityRequestsAfterFirstSync).toBe(2);
     expect(
       requests.filter((url) =>
-        /pulls\/7(?:\/requested_reviewers|\/reviews|\/commits|$)|issues\/7\/timeline/.test(
-          url,
-        ),
+        /pulls\/7(?:\/commits|\/files|$)|issues\/7\/timeline/.test(url),
       ),
-    ).toHaveLength(3);
+    ).toHaveLength(4);
     expect(
       requests.filter(
         (url) => url.endsWith("/user") || url.includes("/user/teams?"),
@@ -162,11 +177,9 @@ describe("GitHub polling", () => {
     ).toHaveLength(0);
     expect(
       requests.filter((url) =>
-        /pulls\/7(?:\/requested_reviewers|\/reviews|\/commits|$)|issues\/7\/timeline/.test(
-          url,
-        ),
+        /pulls\/7(?:\/commits|\/files|$)|issues\/7\/timeline/.test(url),
       ),
-    ).toHaveLength(3);
+    ).toHaveLength(4);
     expect(requests.filter((url) => url.endsWith("/graphql"))).toHaveLength(1);
     expect(
       githubWebhookTargets("status", {
