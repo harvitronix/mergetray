@@ -73,7 +73,9 @@ function hasPendingChecks(row: InboxSectionRow) {
 
 function hasFailingChecks(row: InboxSectionRow) {
   return (
-    row.status?.rollupState === "failing" || (row.status?.failingCount ?? 0) > 0
+    row.status?.rollupState === "failure" ||
+    row.status?.rollupState === "error" ||
+    (row.status?.failingCount ?? 0) > 0
   );
 }
 
@@ -337,4 +339,43 @@ export function classifyInboxSection(
         ?.rules.some((rule) => matchesRule(rule, row, now)),
     ) ?? "other"
   );
+}
+
+export function nextInboxAction(row: InboxSectionRow, now: number): string {
+  if (row.item.state === "merged") return "Merged, no action needed";
+  if (row.item.state === "closed") return "Closed, no action needed";
+  if (row.pullRequestDetails.draft) {
+    return row.isAuthoredByViewer
+      ? "Finish draft and request review"
+      : "Wait for author to finish draft";
+  }
+  if (hasFailingChecks(row)) {
+    return row.isAuthoredByViewer
+      ? "Address failed checks"
+      : "Wait for author to fix checks";
+  }
+  if (hasPendingChecks(row)) return "Wait for checks to complete";
+
+  const changesRequested = hasOpenChangeRequest(row);
+  if (!changesRequested && (hasHumanApproval(row) || isPromotedToShipIt(row))) {
+    return row.pullRequestDetails.autoMergeEnabled
+      ? "Wait for auto-merge"
+      : "Merge";
+  }
+  if (!row.isAuthoredByViewer && !hasOpenBotChangeRequest(row)) {
+    if (row.isReviewRequestedFromViewer) return "Review requested from you";
+    if (hasChangesAfterViewerReviewReason(row)) return "Review new commits";
+  }
+  if (changesRequested) {
+    return row.isAuthoredByViewer
+      ? "Address requested changes"
+      : "Wait for author to address feedback";
+  }
+  if (hasUnansweredHumanComment(row)) return "Reply to review comments";
+  if (row.isAuthoredByViewer) {
+    return isStale(row, now) || hasStaleWithoutHumanReviewReason(row)
+      ? "Follow up for review approval"
+      : "Get a review approval";
+  }
+  return "Review and approve";
 }
