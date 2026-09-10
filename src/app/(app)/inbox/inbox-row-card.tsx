@@ -26,6 +26,7 @@ import {
 import Image from "next/image";
 import type { FormEvent } from "react";
 import { useEffect, useRef } from "react";
+import { aiSlopTerm } from "@/lib/ai-slop-terms";
 import { codexSessionUrl } from "@/lib/codex-links";
 import {
   hasOpenChangeRequest,
@@ -97,6 +98,7 @@ type InboxRowCardProps = {
   timeZone: string;
   isTimelineExpanded: boolean;
   selectionEnabled: boolean;
+  slopModeEnabled: boolean;
   isSelected: boolean;
   exitKind?: "done" | "snooze";
   isSnoozeOpen: boolean;
@@ -294,6 +296,7 @@ export function InboxRowCard({
   timeZone,
   isTimelineExpanded,
   selectionEnabled,
+  slopModeEnabled,
   isSelected,
   exitKind,
   isSnoozeOpen,
@@ -384,7 +387,14 @@ export function InboxRowCard({
           <span className="absolute left-1/2 top-1/2 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[var(--surface-bg)] bg-current" />
         </span>
       ) : null}
-      {isExiting ? (
+      {isExiting && slopModeEnabled ? (
+        <div className="inbox-slop-burst" aria-hidden="true">
+          <div className="inbox-slop-burst-inner">
+            <span>{aiSlopTerm(item.id)}</span>
+          </div>
+        </div>
+      ) : null}
+      {isExiting && !slopModeEnabled ? (
         <Image
           src={
             exitKind === "snooze"

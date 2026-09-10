@@ -5,7 +5,7 @@ import { type FormEvent, useCallback, useState, useTransition } from "react";
 import type { InboxRow } from "@/lib/models";
 import { localSnoozeTime, type SnoozeDuration } from "./inbox-snooze";
 
-const doneExitAnimationMs = 860;
+const doneExitAnimationMs = 1_100;
 const actionErrorMessage = "Couldn’t save that inbox change. Please try again.";
 const syncErrorMessage = "Couldn’t sync GitHub. Please try again.";
 
