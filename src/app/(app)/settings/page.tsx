@@ -215,9 +215,6 @@ export default async function SettingsPage({
 
       <Surface className="mt-4 p-5">
         <h2 className="text-lg font-semibold">Slop mode</h2>
-        <p className="mt-2 text-sm text-foreground/55">
-          Replaces the Done and Snooze mascot with a burst of AI slop.
-        </p>
         {query.slopModeUpdated ? (
           <Notice tone="success" className="mt-5">
             Slop mode {slopMode ? "enabled" : "disabled"}.
