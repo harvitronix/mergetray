@@ -116,7 +116,10 @@ export function InboxSection({
   ).length;
   const handledCount = doneRows.length - snoozedCount;
   const sectionRows = rows.filter(
-    (row) => inboxRowView(row) === groupView && !hiddenRows[row.item.id],
+    (row) =>
+      (inboxRowView(row) === groupView ||
+        (groupView === "active" && exitingRows[row.item.id])) &&
+      !hiddenRows[row.item.id],
   );
   const allSectionRowsSelected =
     sectionRows.length > 0 &&
