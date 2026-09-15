@@ -75,6 +75,14 @@ export function useInboxController({
     });
   }
 
+  function finishExit(inboxItemIds: InboxItemId[]) {
+    setExitingRows((rows) => {
+      const remainingRows = { ...rows };
+      for (const inboxItemId of inboxItemIds) delete remainingRows[inboxItemId];
+      return remainingRows;
+    });
+  }
+
   // Clear optimistic hiding with the new data, never ahead of it.
   if (rows !== previousRows) {
     setPreviousRows(rows);
@@ -94,16 +102,34 @@ export function useInboxController({
     action: InboxAction,
     formData: FormData,
     onFailure?: () => void,
+    onSuccess?: () => void | Promise<void>,
   ) {
     setActionError(null);
     startTransition(async () => {
       try {
         await action(formData);
+        await onSuccess?.();
       } catch {
         onFailure?.();
         setActionError(actionErrorMessage);
         refreshNow();
       }
+    });
+  }
+
+  function invokeExitAction(
+    action: InboxAction,
+    formData: FormData,
+    inboxItemIds: InboxItemId[],
+    onFailure?: () => void,
+  ) {
+    const animationEnd = new Promise<void>((resolve) =>
+      window.setTimeout(resolve, doneExitAnimationMs),
+    );
+    invokeAction(action, formData, onFailure, async () => {
+      await animationEnd;
+      finishExit(inboxItemIds);
+      refreshNow();
     });
   }
 
@@ -121,15 +147,19 @@ export function useInboxController({
     setActionError(null);
     if (status === "active") {
       setHiddenRows((rows) => ({ ...rows, [inboxItemId]: true }));
-      invokeAction(updateStatus, formData, () => restoreRows([inboxItemId]));
+      invokeAction(
+        updateStatus,
+        formData,
+        () => restoreRows([inboxItemId]),
+        refreshNow,
+      );
       return;
     }
 
     setExitingRows((rows) => ({ ...rows, [inboxItemId]: "done" }));
-    window.setTimeout(() => {
-      setHiddenRows((rows) => ({ ...rows, [inboxItemId]: true }));
-      invokeAction(updateStatus, formData, () => restoreRows([inboxItemId]));
-    }, doneExitAnimationMs);
+    invokeExitAction(updateStatus, formData, [inboxItemId], () =>
+      restoreRows([inboxItemId]),
+    );
   }
 
   function submitSnooze(
@@ -147,10 +177,9 @@ export function useInboxController({
     setActionError(null);
     setOpenSnoozeRow(null);
     setExitingRows((rows) => ({ ...rows, [inboxItemId]: "snooze" }));
-    window.setTimeout(() => {
-      setHiddenRows((rows) => ({ ...rows, [inboxItemId]: true }));
-      invokeAction(snoozeItem, formData, () => restoreRows([inboxItemId]));
-    }, doneExitAnimationMs);
+    invokeExitAction(snoozeItem, formData, [inboxItemId], () =>
+      restoreRows([inboxItemId]),
+    );
   }
 
   function toggleSelection(inboxItemId: InboxItemId) {
@@ -204,16 +233,10 @@ export function useInboxController({
       ...Object.fromEntries(inboxItemIds.map((id) => [id, kind])),
     }));
     clearSelection();
-    window.setTimeout(() => {
-      setHiddenRows((rows) => ({
-        ...rows,
-        ...Object.fromEntries(inboxItemIds.map((id) => [id, true])),
-      }));
-      invokeAction(action, formData, () => {
-        restoreRows(inboxItemIds);
-        setSelectedRowIds(new Set(inboxItemIds));
-      });
-    }, doneExitAnimationMs);
+    invokeExitAction(action, formData, inboxItemIds, () => {
+      restoreRows(inboxItemIds);
+      setSelectedRowIds(new Set(inboxItemIds));
+    });
   }
 
   function submitBulkDone(selectedRows: InboxRow[]) {

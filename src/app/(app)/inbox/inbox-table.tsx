@@ -209,7 +209,11 @@ export function InboxTable({
     ),
   );
   const visualRows = groupInboxRows(
-    visibleRows.filter((row) => inboxRowView(row) === inboxView),
+    visibleRows.filter(
+      (row) =>
+        inboxRowView(row) === inboxView ||
+        (inboxView === "active" && exitingRows[row.item.id]),
+    ),
     now,
   );
   const previewRow = rows.find((row) => row.item.id === previewRowId);

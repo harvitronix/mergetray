@@ -53,7 +53,6 @@ export default async function InboxPage({
     for (const inboxItemId of formData.getAll("inboxItemId")) {
       setUserStatus(String(inboxItemId), status);
     }
-    revalidatePath("/", "layout");
   }
 
   async function snoozeItem(formData: FormData) {
@@ -78,7 +77,6 @@ export default async function InboxPage({
         Number.isFinite(snoozedUntil) ? snoozedUntil : undefined,
       );
     }
-    revalidatePath("/", "layout");
   }
 
   async function promoteToShipIt(formData: FormData) {
