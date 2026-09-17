@@ -11,6 +11,7 @@ import {
   timelineItems,
   timestamp,
 } from "./github-sync-reducers.ts";
+import { ignoreCheckUpdates } from "./inbox-preferences.ts";
 
 type SqlRow = Record<string, string | number | bigint | null>;
 
@@ -594,7 +595,14 @@ async function refreshVolatilePullRequests(
           Number(autoMergeEnabled),
           inboxItemId,
         );
-        reactivate(inboxItemId, Date.now());
+        if (
+          updatedAt > Number(stored.updated_at) ||
+          live.headRefOid !== stored.head_sha ||
+          autoMergeChanged ||
+          !ignoreCheckUpdates()
+        ) {
+          reactivate(inboxItemId, Date.now());
+        }
       }
     });
   }

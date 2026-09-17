@@ -27,6 +27,10 @@ import {
 } from "@/lib/diff-file-filters";
 import { githubAuthStatus } from "@/lib/github-auth";
 import { githubSyncState, syncGithub } from "@/lib/github-sync";
+import {
+  ignoreCheckUpdates,
+  ignoreCheckUpdatesSetting,
+} from "@/lib/inbox-preferences";
 import { githubIdentityConfigured, listRepositories } from "@/lib/inbox-store";
 import { slopModeEnabled, slopModeSetting } from "@/lib/slop-mode";
 import { appTheme, themeCookieName } from "@/lib/theme";
@@ -44,6 +48,7 @@ export default async function SettingsPage({
     codexUpdated?: string;
     diffFiltersUpdated?: string;
     slopModeUpdated?: string;
+    inboxPreferencesUpdated?: string;
     repositoryPathUpdated?: string;
     repositoryPathError?: string;
     worktreeCleaned?: string;
@@ -59,6 +64,7 @@ export default async function SettingsPage({
   ]);
   const codexEnabled = codexIntegrationEnabled();
   const slopMode = slopModeEnabled();
+  const checksIgnored = ignoreCheckUpdates();
   const managedWorktrees = await listCodexManagedWorktrees();
   const syncState = githubSyncState();
 
@@ -95,6 +101,17 @@ export default async function SettingsPage({
     );
     revalidatePath("/", "layout");
     redirect("/settings?diffFiltersUpdated=1");
+  }
+
+  async function updateInboxPreferences(formData: FormData) {
+    "use server";
+
+    setSetting(
+      ignoreCheckUpdatesSetting,
+      formData.get("enabled") === "true" ? "true" : undefined,
+    );
+    revalidatePath("/", "layout");
+    redirect("/settings?inboxPreferencesUpdated=1");
   }
 
   async function updateSlopMode(formData: FormData) {
@@ -163,6 +180,44 @@ export default async function SettingsPage({
       ) : null}
 
       <ThemeSettingsForm initialTheme={theme} />
+
+      <Surface className="mt-4 p-5">
+        <h2 className="text-lg font-semibold">Inbox</h2>
+        {query.inboxPreferencesUpdated ? (
+          <Notice tone="success" className="mt-5">
+            Inbox preferences saved.
+          </Notice>
+        ) : null}
+        <Surface variant="inset" className="mt-5 px-3 py-3 text-sm">
+          <form action={updateInboxPreferences}>
+            <label className="flex items-start gap-3">
+              <input
+                type="checkbox"
+                name="enabled"
+                value="true"
+                defaultChecked={checksIgnored}
+                className="mt-1 size-4 accent-foreground"
+              />
+              <span>
+                <span className="font-medium">
+                  Keep check updates out of Active
+                </span>
+                <span className="mt-1 block text-foreground/55">
+                  Check updates alone won&apos;t bring Done or snoozed PRs back
+                  to Active, even when checks pass or fail. Other PR activity
+                  and snooze expiry still bring them back.
+                </span>
+              </span>
+            </label>
+            <button
+              type="submit"
+              className="mt-3 h-9 rounded-md bg-[var(--selected-control-bg)] px-3 text-xs font-semibold text-[var(--selected-control-fg)]"
+            >
+              Save inbox preferences
+            </button>
+          </form>
+        </Surface>
+      </Surface>
 
       <Surface className="mt-4 p-5">
         <div className="flex items-center gap-3">
