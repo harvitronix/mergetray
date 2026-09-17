@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { closeDatabase, getDatabase } from "./database.ts";
+import { closeDatabase, getDatabase, setSetting } from "./database.ts";
 import {
   githubDataRevision,
   syncGithub,
@@ -10,6 +10,7 @@ import {
   upsertSelectedRepository,
 } from "./github-sync.ts";
 import { githubWebhookTargets } from "./github-webhooks.ts";
+import { ignoreCheckUpdatesSetting } from "./inbox-preferences.ts";
 
 vi.mock("./github-auth.ts", () => ({
   githubToken: async () => "test-token",
@@ -38,11 +39,38 @@ const pullRequest = {
 
 let dataDirectory: string;
 let requests: string[];
+const volatilePullRequest = {
+  id: pullRequest.node_id,
+  state: "OPEN",
+  updatedAt,
+  closedAt: null,
+  mergedAt: null,
+  headRefOid: pullRequest.head.sha,
+  autoMergeRequest: { enabledAt: updatedAt } as { enabledAt: string } | null,
+  reviewRequests: { nodes: [] },
+  reviews: { nodes: [] },
+  statusCheckRollup: {
+    state: "SUCCESS",
+    contexts: {
+      nodes: [] as Array<{ status: string; conclusion: string | null }>,
+    },
+  },
+};
+let livePullRequest: typeof volatilePullRequest;
+
+function dismissPullRequest(snoozed: boolean) {
+  getDatabase()
+    .prepare(
+      "INSERT INTO user_inbox_item_states(inbox_item_id, status, marked_done_at, snoozed_until) VALUES (1, 'done', ?, ?)",
+    )
+    .run(Date.now(), snoozed ? Date.now() + 3_600_000 : null);
+}
 
 beforeEach(() => {
   dataDirectory = mkdtempSync(join(tmpdir(), "mergetray-sync-"));
   process.env.MERGETRAY_DATA_DIR = dataDirectory;
   requests = [];
+  livePullRequest = structuredClone(volatilePullRequest);
   vi.stubGlobal(
     "fetch",
     async (input: string | URL | Request, init?: RequestInit) => {
@@ -51,18 +79,7 @@ beforeEach(() => {
       if (url.endsWith("/graphql")) {
         return Response.json({
           data: {
-            p0: {
-              id: pullRequest.node_id,
-              state: "OPEN",
-              updatedAt,
-              closedAt: null,
-              mergedAt: null,
-              headRefOid: pullRequest.head.sha,
-              autoMergeRequest: { enabledAt: updatedAt },
-              reviewRequests: { nodes: [] },
-              reviews: { nodes: [] },
-              statusCheckRollup: { state: "SUCCESS", contexts: { nodes: [] } },
-            },
+            p0: livePullRequest,
           },
         });
       }
@@ -119,6 +136,93 @@ afterEach(() => {
 });
 
 describe("GitHub polling", () => {
+  test.each([
+    "done",
+    "snoozed",
+  ])("keeps %s PRs hidden through check updates when enabled", async (status) => {
+    const now = vi
+      .spyOn(Date, "now")
+      .mockReturnValue(Date.parse(updatedAt) + 1_000);
+    const checks = livePullRequest.statusCheckRollup;
+    checks.state = "PENDING";
+    checks.contexts.nodes = Array.from({ length: 6 }, () => ({
+      status: "IN_PROGRESS",
+      conclusion: null,
+    }));
+    await syncGithub(true);
+    setSetting(ignoreCheckUpdatesSetting, "true");
+    dismissPullRequest(status === "snoozed");
+    const savedState = getDatabase()
+      .prepare("SELECT * FROM user_inbox_item_states")
+      .get();
+
+    for (const pendingCount of [5, 4, 0]) {
+      now.mockReturnValue(Date.now() + 1_000);
+      checks.state = pendingCount ? "PENDING" : "FAILURE";
+      checks.contexts.nodes = checks.contexts.nodes.map((_, index) => ({
+        status: index < pendingCount ? "IN_PROGRESS" : "COMPLETED",
+        conclusion: index < pendingCount ? null : "FAILURE",
+      }));
+      await syncGithubItem({ repository: "acme/widgets", number: 7 });
+      expect(
+        getDatabase().prepare("SELECT * FROM user_inbox_item_states").get(),
+      ).toEqual(savedState);
+      expect(
+        getDatabase()
+          .prepare(
+            "SELECT pending_count, failing_count FROM pull_request_statuses",
+          )
+          .get(),
+      ).toEqual({
+        pending_count: pendingCount,
+        failing_count: 6 - pendingCount,
+      });
+    }
+
+    checks.state = "SUCCESS";
+    checks.contexts.nodes = checks.contexts.nodes.map(() => ({
+      status: "COMPLETED",
+      conclusion: "SUCCESS",
+    }));
+    await syncGithub(true);
+    expect(
+      getDatabase().prepare("SELECT * FROM user_inbox_item_states").get(),
+    ).toEqual(savedState);
+    expect(
+      getDatabase()
+        .prepare("SELECT passing_count FROM pull_request_statuses")
+        .get(),
+    ).toEqual({ passing_count: 6 });
+  });
+
+  test.each([
+    "default",
+    "disabled",
+    "activity",
+    "commit",
+    "auto-merge",
+  ])("still reactivates for %s updates", async (change) => {
+    const now = vi
+      .spyOn(Date, "now")
+      .mockReturnValue(Date.parse(updatedAt) + 1_000);
+    await syncGithub(true);
+    if (change !== "default") setSetting(ignoreCheckUpdatesSetting, "true");
+    if (change === "disabled") setSetting(ignoreCheckUpdatesSetting, undefined);
+    dismissPullRequest(true);
+    now.mockReturnValue(Date.now() + 1_000);
+    livePullRequest.statusCheckRollup.state = "FAILURE";
+    if (change === "activity")
+      livePullRequest.updatedAt = new Date(Date.now()).toISOString();
+    if (change === "commit") livePullRequest.headRefOid = "new-commit";
+    if (change === "auto-merge") livePullRequest.autoMergeRequest = null;
+    await syncGithub(true);
+    expect(
+      getDatabase()
+        .prepare("SELECT status, snoozed_until FROM user_inbox_item_states")
+        .get(),
+    ).toEqual({ status: "active", snoozed_until: null });
+  });
+
   test("does not repeat unchanged PR or identity hydration", async () => {
     const now = vi.spyOn(Date, "now").mockReturnValue(1_000);
     await syncGithub(true);
