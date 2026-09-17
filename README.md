@@ -14,6 +14,9 @@ quickly, across all your repositories, so you can deploy faster.
 - Know which PRs need attention easily.
 - Keep active, snoozed, and handled PRs separate.
 - Filter PRs by repository, ownership, or author.
+- Switch between grouped, list, and Kanban inbox layouts. Kanban uses compact
+  cards arranged from Drafts to Ship It, hides empty columns, and opens full PR
+  details in a side panel.
 - See dependent PRs together in stacks.
 - See branch, change, check, review, and activity details without opening each
   PR on GitHub.

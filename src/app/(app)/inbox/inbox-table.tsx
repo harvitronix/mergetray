@@ -3,6 +3,7 @@
 import {
   ExternalLink,
   GitPullRequestArrow,
+  Kanban,
   LayoutGrid,
   List,
   ListChecks,
@@ -22,6 +23,7 @@ import {
 import { groupInboxRows } from "@/lib/inbox-stacks";
 import type { InboxRow } from "@/lib/models";
 import { InboxBulkActions } from "./inbox-bulk-actions";
+import { InboxKanban } from "./inbox-kanban";
 import { InboxRowCard } from "./inbox-row-card";
 import {
   InboxSection,
@@ -154,7 +156,7 @@ export function InboxTable({
     const params = new URLSearchParams();
     if (selectedRepositoryId) params.set("repo", selectedRepositoryId);
     if (nextView !== "active") params.set("view", nextView);
-    if (nextLayout === "visual") params.set("layout", nextLayout);
+    if (nextLayout !== "grouped") params.set("layout", nextLayout);
     if (author) params.set("author", author);
 
     const query = params.toString();
@@ -314,6 +316,15 @@ export function InboxTable({
               <List className="size-3.5" />
               List
             </button>
+            <button
+              type="button"
+              className={controlClass(layout === "kanban")}
+              aria-pressed={layout === "kanban"}
+              onClick={() => replaceLayout("kanban")}
+            >
+              <Kanban className="size-3.5" />
+              Kanban
+            </button>
           </div>
           <button
             type="button"
@@ -457,7 +468,7 @@ export function InboxTable({
               onPreview={openPreview}
             />
           ))
-        ) : (
+        ) : layout === "visual" ? (
           <div className="inbox-list">
             {visualRows.map((group) => {
               const isStack = group.rows.length > 1;
@@ -546,6 +557,26 @@ export function InboxTable({
               );
             })}
           </div>
+        ) : (
+          <InboxKanban
+            sections={inboxSectionDefinitions.map((section) => ({
+              section,
+              rows: rowsByGroup[section.id],
+            }))}
+            view={inboxView}
+            hiddenRows={hiddenRows}
+            exitingRows={exitingRows}
+            now={now}
+            timeZone={timeZone}
+            selectionEnabled={isSelectionMode}
+            selectedRowIds={selectedRowIds}
+            stackOrdinals={stackOrdinals}
+            updateStatus={updateStatus}
+            onStatusSubmit={animateDoneSubmit}
+            onToggleSelection={toggleSelection}
+            onToggleGroupSelection={toggleGroupSelection}
+            onPreview={openPreview}
+          />
         )}
         {layout === "visual" && visualRows.length === 0 && rows.length ? (
           <Surface className="px-4 py-10 text-center text-sm text-foreground/50">
@@ -564,7 +595,9 @@ export function InboxTable({
       {previewRow ? (
         <PrPreviewDrawer
           row={previewRow}
+          now={now}
           timeZone={timeZone}
+          stackOrdinal={stackOrdinals.get(previewRow.item.id)}
           codexEnabled={codexEnabled}
           onClose={() => setPreviewRowId(null)}
         />
