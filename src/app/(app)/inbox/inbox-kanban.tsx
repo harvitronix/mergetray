@@ -2,25 +2,30 @@
 
 import {
   Check,
+  ChevronDown,
   CircleDot,
+  Clock3,
   Layers3,
   Minus,
   PanelRightOpen,
+  Rocket,
   RotateCcw,
   StickyNote,
   ThumbsUp,
   X,
 } from "lucide-react";
-import type { FormEvent } from "react";
+import { type FormEvent, useEffect, useRef } from "react";
 import {
   hasOpenChangeRequest,
   type InboxGroupId,
   type InboxSectionDefinition,
   isBot,
+  isPromotedToShipIt,
   nextInboxAction,
 } from "@/lib/inbox-section-rules";
 import type { InboxRow } from "@/lib/models";
 import { inboxRowView, type SectionView } from "./inbox-section";
+import { snoozeOptions } from "./inbox-snooze";
 
 type InboxItemId = InboxRow["item"]["id"];
 
@@ -103,10 +108,16 @@ function KanbanCard({
   selectionEnabled,
   isSelected,
   isExiting,
+  isSnoozeOpen,
   stackOrdinal,
   updateStatus,
+  snoozeItem,
+  promoteToShipIt,
   onStatusSubmit,
+  onSnoozeSubmit,
+  onShipItSubmit,
   onToggleSelection,
+  onToggleSnooze,
   onPreview,
 }: {
   row: InboxRow;
@@ -116,25 +127,50 @@ function KanbanCard({
   selectionEnabled: boolean;
   isSelected: boolean;
   isExiting: boolean;
+  isSnoozeOpen: boolean;
   stackOrdinal?: { position: number; total: number };
   updateStatus: (formData: FormData) => void | Promise<void>;
+  snoozeItem: (formData: FormData) => void | Promise<void>;
+  promoteToShipIt: (formData: FormData) => void | Promise<void>;
   onStatusSubmit: (
     event: FormEvent<HTMLFormElement>,
     inboxItemId: InboxItemId,
   ) => void;
+  onSnoozeSubmit: (
+    event: FormEvent<HTMLFormElement>,
+    inboxItemId: InboxItemId,
+  ) => void;
+  onShipItSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onToggleSelection: (inboxItemId: InboxItemId) => void;
+  onToggleSnooze: (inboxItemId: InboxItemId) => void;
   onPreview: (row: InboxRow) => void;
 }) {
   const check = checks(row);
   const reviewState = review(row);
   const ChecksIcon = check.icon;
   const ReviewIcon = reviewState.icon;
+  const shipItPromoted = isPromotedToShipIt(row);
+  const snoozeMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isSnoozeOpen) return;
+
+    function closeOnClickOutside(event: PointerEvent) {
+      if (!snoozeMenuRef.current?.contains(event.target as Node)) {
+        onToggleSnooze(row.item.id);
+      }
+    }
+
+    document.addEventListener("pointerdown", closeOnClickOutside);
+    return () =>
+      document.removeEventListener("pointerdown", closeOnClickOutside);
+  }, [isSnoozeOpen, onToggleSnooze, row.item.id]);
 
   return (
     <article
-      className={`app-inset-surface inbox-card group relative overflow-hidden transition ${
-        isExiting ? "inbox-card-done-exit" : ""
-      } ${isSelected ? "ring-2 ring-foreground/25" : ""}`}
+      className={`app-inset-surface inbox-card group relative transition ${
+        isExiting ? "inbox-card-done-exit overflow-hidden" : "overflow-visible"
+      } ${isSnoozeOpen ? "z-30" : ""} ${isSelected ? "ring-2 ring-foreground/25" : ""}`}
     >
       <button
         type="button"
@@ -198,6 +234,76 @@ function KanbanCard({
         <span className="min-w-0 flex-1 truncate">
           @{row.item.authorLogin} · {updatedLabel(row.item.updatedAt, timeZone)}
         </span>
+        {view === "active" ? (
+          <div
+            ref={snoozeMenuRef}
+            className="relative inline-flex h-7 shrink-0 items-stretch divide-x divide-foreground/10 rounded-md border border-foreground/10 bg-background/80 shadow-sm"
+          >
+            <form
+              action={promoteToShipIt}
+              onSubmit={onShipItSubmit}
+              className="contents"
+            >
+              <input type="hidden" name="inboxItemId" value={row.item.id} />
+              <input
+                type="hidden"
+                name="promoted"
+                value={shipItPromoted ? "false" : "true"}
+              />
+              <button
+                type="submit"
+                className={`inline-flex size-7 items-center justify-center rounded-l-md transition hover:bg-foreground/[0.05] disabled:opacity-45 ${
+                  shipItPromoted
+                    ? "bg-emerald-500/12 text-[var(--success-text)]"
+                    : "text-foreground/60"
+                }`}
+                disabled={isExiting}
+                aria-label={shipItPromoted ? "Unship" : "Ship it"}
+                aria-pressed={shipItPromoted}
+                title={shipItPromoted ? "Unship" : "Ship it"}
+              >
+                <Rocket className="size-3.5" />
+              </button>
+            </form>
+            <button
+              type="button"
+              className="inline-flex h-7 items-center justify-center gap-0.5 rounded-r-md px-1.5 text-foreground/60 transition hover:bg-foreground/[0.05] disabled:opacity-45"
+              disabled={isExiting}
+              aria-expanded={isSnoozeOpen}
+              aria-label="Snooze"
+              title="Snooze"
+              onClick={() => onToggleSnooze(row.item.id)}
+            >
+              <Clock3 className="size-3.5" />
+              <ChevronDown className="size-3 text-foreground/40" />
+            </button>
+            {isSnoozeOpen ? (
+              <div className="absolute bottom-9 right-0 z-40 w-40 overflow-hidden rounded-lg border border-foreground/10 bg-background shadow-xl">
+                {snoozeOptions.map((option) => (
+                  <form
+                    key={option.value}
+                    action={snoozeItem}
+                    onSubmit={(event) => onSnoozeSubmit(event, row.item.id)}
+                  >
+                    <input
+                      type="hidden"
+                      name="inboxItemId"
+                      value={row.item.id}
+                    />
+                    <input type="hidden" name="duration" value={option.value} />
+                    <button
+                      type="submit"
+                      className="flex h-9 w-full items-center gap-2 px-3 text-left text-xs font-medium hover:bg-foreground/[0.05]"
+                    >
+                      <Clock3 className="size-3.5 text-foreground/45" />
+                      {option.label}
+                    </button>
+                  </form>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         <form
           action={updateStatus}
           onSubmit={(event) => onStatusSubmit(event, row.item.id)}
@@ -236,9 +342,15 @@ export function InboxKanban({
   selectionEnabled,
   selectedRowIds,
   stackOrdinals,
+  openSnoozeRow,
   updateStatus,
+  snoozeItem,
+  promoteToShipIt,
   onStatusSubmit,
+  onSnoozeSubmit,
+  onShipItSubmit,
   onToggleSelection,
+  onToggleSnooze,
   onToggleGroupSelection,
   onPreview,
 }: {
@@ -251,12 +363,21 @@ export function InboxKanban({
   selectionEnabled: boolean;
   selectedRowIds: ReadonlySet<InboxItemId>;
   stackOrdinals: ReadonlyMap<InboxItemId, { position: number; total: number }>;
+  openSnoozeRow: string | null;
   updateStatus: (formData: FormData) => void | Promise<void>;
+  snoozeItem: (formData: FormData) => void | Promise<void>;
+  promoteToShipIt: (formData: FormData) => void | Promise<void>;
   onStatusSubmit: (
     event: FormEvent<HTMLFormElement>,
     inboxItemId: InboxItemId,
   ) => void;
+  onSnoozeSubmit: (
+    event: FormEvent<HTMLFormElement>,
+    inboxItemId: InboxItemId,
+  ) => void;
+  onShipItSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onToggleSelection: (inboxItemId: InboxItemId) => void;
+  onToggleSnooze: (inboxItemId: InboxItemId) => void;
   onToggleGroupSelection: (inboxItemIds: InboxItemId[]) => void;
   onPreview: (row: InboxRow) => void;
 }) {
@@ -327,10 +448,16 @@ export function InboxKanban({
                     selectionEnabled={selectionEnabled}
                     isSelected={selectedRowIds.has(row.item.id)}
                     isExiting={Boolean(exitingRows[row.item.id])}
+                    isSnoozeOpen={openSnoozeRow === row.item.id}
                     stackOrdinal={stackOrdinals.get(row.item.id)}
                     updateStatus={updateStatus}
+                    snoozeItem={snoozeItem}
+                    promoteToShipIt={promoteToShipIt}
                     onStatusSubmit={onStatusSubmit}
+                    onSnoozeSubmit={onSnoozeSubmit}
+                    onShipItSubmit={onShipItSubmit}
                     onToggleSelection={onToggleSelection}
+                    onToggleSnooze={onToggleSnooze}
                     onPreview={onPreview}
                   />
                 ))}

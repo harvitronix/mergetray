@@ -571,9 +571,15 @@ export function InboxTable({
             selectionEnabled={isSelectionMode}
             selectedRowIds={selectedRowIds}
             stackOrdinals={stackOrdinals}
+            openSnoozeRow={openSnoozeRow}
             updateStatus={updateStatus}
+            snoozeItem={snoozeItem}
+            promoteToShipIt={promoteToShipIt}
             onStatusSubmit={animateDoneSubmit}
+            onSnoozeSubmit={submitSnooze}
+            onShipItSubmit={submitShipItPromotion}
             onToggleSelection={toggleSelection}
+            onToggleSnooze={toggleSnooze}
             onToggleGroupSelection={toggleGroupSelection}
             onPreview={openPreview}
           />
