@@ -59,6 +59,7 @@ function emptyRowsByGroup() {
 
 export function InboxTable({
   rows,
+  mergedRows,
   view,
   initialLayout,
   selectedAuthor,
@@ -74,6 +75,7 @@ export function InboxTable({
   setUserNote,
 }: {
   rows: InboxRow[];
+  mergedRows: InboxRow[];
   view: SectionView;
   initialLayout: InboxLayout;
   selectedAuthor?: string;
@@ -91,16 +93,17 @@ export function InboxTable({
   const router = useRouter();
   const [now] = useState(() => Date.now());
   const authors = Array.from(
-    new Set(rows.map((row) => row.item.authorLogin)),
+    new Set([...rows, ...mergedRows].map((row) => row.item.authorLogin)),
   ).sort((a, b) => a.localeCompare(b));
-  const filteredRows = selectedAuthor
-    ? rows.filter((row) => {
-        if (selectedAuthor === mineAuthorFilter) return row.isAuthoredByViewer;
-        if (selectedAuthor === notMineAuthorFilter)
-          return !row.isAuthoredByViewer;
-        return row.item.authorLogin === selectedAuthor;
-      })
-    : rows;
+  const matchesAuthor = (row: InboxRow) => {
+    if (selectedAuthor === mineAuthorFilter) return row.isAuthoredByViewer;
+    if (selectedAuthor === notMineAuthorFilter) return !row.isAuthoredByViewer;
+    return row.item.authorLogin === selectedAuthor;
+  };
+  const filteredRows = selectedAuthor ? rows.filter(matchesAuthor) : rows;
+  const filteredMergedRows = selectedAuthor
+    ? mergedRows.filter(matchesAuthor)
+    : mergedRows;
   const [layout, setLayout] = useState<InboxLayout>(initialLayout);
   const [inboxView, setInboxView] = useState<SectionView>(view);
   const [previousView, setPreviousView] = useState(view);
@@ -218,7 +221,9 @@ export function InboxTable({
     ),
     now,
   );
-  const previewRow = rows.find((row) => row.item.id === previewRowId);
+  const previewRow = [...rows, ...mergedRows].find(
+    (row) => row.item.id === previewRowId,
+  );
 
   function toggleTimeline(inboxItemId: InboxItemId) {
     setExpandedRows((rows) => ({
@@ -269,7 +274,7 @@ export function InboxTable({
           <select
             className="min-w-0 bg-transparent font-semibold outline-none"
             value={selectedAuthor ?? ""}
-            disabled={rows.length === 0}
+            disabled={rows.length === 0 && mergedRows.length === 0}
             onChange={(event) => replaceAuthorFilter(event.currentTarget.value)}
           >
             <option value="">All</option>
@@ -564,6 +569,7 @@ export function InboxTable({
               rows: rowsByGroup[section.id],
             }))}
             view={inboxView}
+            mergedRows={filteredMergedRows}
             hiddenRows={hiddenRows}
             exitingRows={exitingRows}
             now={now}
@@ -589,7 +595,7 @@ export function InboxTable({
             No {inboxView === "done" ? "handled" : inboxView} items.
           </Surface>
         ) : null}
-        {rows.length === 0 ? (
+        {rows.length === 0 && (layout !== "kanban" || !mergedRows.length) ? (
           <Surface className="px-4 py-12 text-center">
             <p className="font-medium">No open pull requests yet.</p>
             <p className="mt-2 text-sm text-foreground/55">

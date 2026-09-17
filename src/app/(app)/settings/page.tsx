@@ -30,6 +30,8 @@ import { githubSyncState, syncGithub } from "@/lib/github-sync";
 import {
   ignoreCheckUpdates,
   ignoreCheckUpdatesSetting,
+  kanbanMergedHours,
+  kanbanMergedHoursSetting,
 } from "@/lib/inbox-preferences";
 import { githubIdentityConfigured, listRepositories } from "@/lib/inbox-store";
 import { slopModeEnabled, slopModeSetting } from "@/lib/slop-mode";
@@ -65,6 +67,7 @@ export default async function SettingsPage({
   const codexEnabled = codexIntegrationEnabled();
   const slopMode = slopModeEnabled();
   const checksIgnored = ignoreCheckUpdates();
+  const mergedHours = kanbanMergedHours();
   const managedWorktrees = await listCodexManagedWorktrees();
   const syncState = githubSyncState();
 
@@ -109,6 +112,10 @@ export default async function SettingsPage({
     setSetting(
       ignoreCheckUpdatesSetting,
       formData.get("enabled") === "true" ? "true" : undefined,
+    );
+    setSetting(
+      kanbanMergedHoursSetting,
+      String(kanbanMergedHours(String(formData.get("mergedHours") ?? ""))),
     );
     revalidatePath("/", "layout");
     redirect("/settings?inboxPreferencesUpdated=1");
@@ -208,6 +215,26 @@ export default async function SettingsPage({
                   and snooze expiry still bring them back.
                 </span>
               </span>
+            </label>
+            <label className="mt-4 flex items-center gap-3 border-t border-foreground/10 pt-4">
+              <span className="min-w-0 flex-1">
+                <span className="font-medium">Merged Kanban window</span>
+                <span className="mt-1 block text-foreground/55">
+                  Keep recently merged pull requests in the final Kanban column
+                  for this many hours.
+                </span>
+              </span>
+              <input
+                type="number"
+                name="mergedHours"
+                min="1"
+                step="1"
+                required
+                defaultValue={mergedHours}
+                aria-label="Merged Kanban window in hours"
+                className="h-9 w-20 rounded-md border border-foreground/10 bg-background px-2.5 text-right font-medium"
+              />
+              <span className="text-foreground/55">hours</span>
             </label>
             <button
               type="submit"
