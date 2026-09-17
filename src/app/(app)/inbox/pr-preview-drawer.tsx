@@ -186,6 +186,7 @@ export function PrPreviewDrawer({
   const section = inboxSectionDefinitions.find(
     ({ id }) => id === classifyInboxSection(row, now),
   );
+  const sectionLabel = row.item.state === "merged" ? "Merged" : section?.label;
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -245,12 +246,12 @@ export function PrPreviewDrawer({
             </button>
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[11px] font-semibold">
-            {section ? (
+            {sectionLabel ? (
               <span className="pill-muted inline-flex h-6 items-center rounded px-2 ring-1 ring-foreground/10">
-                {section.label}
+                {sectionLabel}
               </span>
             ) : null}
-            {details.autoMergeEnabled ? (
+            {row.item.state === "open" && details.autoMergeEnabled ? (
               <span className="inline-flex h-6 items-center gap-1 rounded bg-fuchsia-600 px-2 text-white">
                 <Rocket className="size-3" />
                 Auto-merge on

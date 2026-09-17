@@ -239,21 +239,33 @@ export function listRepositories() {
   ).map(repository);
 }
 
-function loadInboxRows(repositoryId?: string): InboxRow[] {
-  wakeExpiredSnoozes();
+function loadInboxRows(
+  repositoryId?: string,
+  mergedSince?: number,
+): InboxRow[] {
+  const merged = mergedSince !== undefined;
+  if (!merged) wakeExpiredSnoozes();
   const db = getDatabase();
   const viewerId = setting("github_user_id");
   const viewerLogin = setting("github_login");
   const viewerTeams = new Set(
     JSON.parse(setting("github_teams") ?? "[]") as string[],
   );
+  const stateClause = merged
+    ? "i.state = 'merged' AND d.merged_at >= ?"
+    : "i.state = 'open'";
+  const rowParams = merged
+    ? [mergedSince, repositoryId ?? null, repositoryId ?? null]
+    : [repositoryId ?? null, repositoryId ?? null];
   const rows = db
     .prepare(
-      `SELECT * FROM inbox_items
-       WHERE state = 'open' AND (? IS NULL OR repository_id = ?)
-       ORDER BY updated_at DESC`,
+      `SELECT i.* FROM inbox_items i
+       JOIN pull_request_details d ON d.inbox_item_id = i.id
+       WHERE ${stateClause}
+       AND (? IS NULL OR i.repository_id = ?)
+       ORDER BY ${merged ? "d.merged_at" : "i.updated_at"} DESC`,
     )
-    .all(repositoryId ?? null, repositoryId ?? null) as SqlRow[];
+    .all(...rowParams) as SqlRow[];
   const repositories = rowsById(
     db.prepare("SELECT * FROM repositories").all() as SqlRow[],
   );
@@ -266,9 +278,11 @@ function loadInboxRows(repositoryId?: string): InboxRow[] {
       .prepare(
         `SELECT f.* FROM pull_request_files f
          JOIN inbox_items i ON i.id = f.inbox_item_id
-         WHERE i.state = 'open' AND (? IS NULL OR i.repository_id = ?)`,
+         JOIN pull_request_details d ON d.inbox_item_id = i.id
+         WHERE ${stateClause}
+         AND (? IS NULL OR i.repository_id = ?)`,
       )
-      .all(repositoryId ?? null, repositoryId ?? null) as SqlRow[],
+      .all(...rowParams) as SqlRow[],
     pullRequestFile,
   );
   const filters = diffFileFilters();
@@ -363,7 +377,14 @@ function loadInboxRows(repositoryId?: string): InboxRow[] {
   });
 }
 
-export const listInboxRows = cache(loadInboxRows);
+export const listInboxRows = cache((repositoryId?: string) =>
+  loadInboxRows(repositoryId),
+);
+
+export const listMergedInboxRows = cache(
+  (hours: number, repositoryId?: string) =>
+    loadInboxRows(repositoryId, Date.now() - hours * 60 * 60 * 1000),
+);
 
 export function inboxCounts(rows = listInboxRows()) {
   const repositories = new Map<string, number>();

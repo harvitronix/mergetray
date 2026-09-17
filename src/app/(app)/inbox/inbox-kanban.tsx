@@ -5,6 +5,7 @@ import {
   ChevronDown,
   CircleDot,
   Clock3,
+  GitMerge,
   Layers3,
   Minus,
   PanelRightOpen,
@@ -28,21 +29,24 @@ import { inboxRowView, type SectionView } from "./inbox-section";
 import { snoozeOptions } from "./inbox-snooze";
 
 type InboxItemId = InboxRow["item"]["id"];
+type KanbanColumnId = InboxGroupId | "merged";
 
-const sectionStyles = {
+const sectionStyles: Record<KanbanColumnId, string> = {
   ready_to_deploy: "bg-emerald-500",
   ready_for_action: "bg-amber-500",
   yours: "bg-sky-500",
   drafts: "bg-violet-500",
   other: "bg-foreground/35",
+  merged: "bg-emerald-500",
 };
 
-const sectionOrder: Record<InboxGroupId, number> = {
+const sectionOrder: Record<KanbanColumnId, number> = {
   drafts: 0,
   other: 1,
   yours: 2,
   ready_for_action: 3,
   ready_to_deploy: 4,
+  merged: 5,
 };
 
 function checks(row: InboxRow) {
@@ -150,6 +154,8 @@ function KanbanCard({
   const ChecksIcon = check.icon;
   const ReviewIcon = reviewState.icon;
   const shipItPromoted = isPromotedToShipIt(row);
+  const isMerged = row.item.state === "merged";
+  const mergedAt = row.pullRequestDetails.mergedAt ?? row.item.closedAt;
   const snoozeMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -221,7 +227,7 @@ function KanbanCard({
         ) : null}
       </button>
       <div className="flex items-center gap-2 border-t border-foreground/8 px-3.5 py-2.5 text-[11px] text-foreground/45">
-        {view === "active" && selectionEnabled ? (
+        {!isMerged && view === "active" && selectionEnabled ? (
           <input
             type="checkbox"
             className="size-4 shrink-0 cursor-pointer accent-[var(--selected-control-bg)]"
@@ -232,9 +238,10 @@ function KanbanCard({
           />
         ) : null}
         <span className="min-w-0 flex-1 truncate">
-          @{row.item.authorLogin} · {updatedLabel(row.item.updatedAt, timeZone)}
+          @{row.item.authorLogin} · {isMerged ? "Merged " : ""}
+          {updatedLabel(mergedAt ?? row.item.updatedAt, timeZone)}
         </span>
-        {view === "active" ? (
+        {!isMerged && view === "active" ? (
           <div
             ref={snoozeMenuRef}
             className="relative inline-flex h-7 shrink-0 items-stretch divide-x divide-foreground/10 rounded-md border border-foreground/10 bg-background/80 shadow-sm"
@@ -304,29 +311,33 @@ function KanbanCard({
             ) : null}
           </div>
         ) : null}
-        <form
-          action={updateStatus}
-          onSubmit={(event) => onStatusSubmit(event, row.item.id)}
-        >
-          <input
-            type="hidden"
-            name="status"
-            value={view === "active" ? "done" : "active"}
-          />
-          <input type="hidden" name="inboxItemId" value={row.item.id} />
-          <button
-            type="submit"
-            className="inline-flex h-7 items-center gap-1 rounded-md bg-[var(--selected-control-bg)] px-2.5 font-semibold text-[var(--selected-control-fg)] shadow-sm disabled:opacity-60"
-            disabled={isExiting}
+        {isMerged ? (
+          <GitMerge className="size-4 shrink-0 text-[var(--success-text)]" />
+        ) : (
+          <form
+            action={updateStatus}
+            onSubmit={(event) => onStatusSubmit(event, row.item.id)}
           >
-            {view === "active" ? (
-              <Check className="size-3" />
-            ) : (
-              <RotateCcw className="size-3" />
-            )}
-            {view === "active" ? "Done" : "Active"}
-          </button>
-        </form>
+            <input
+              type="hidden"
+              name="status"
+              value={view === "active" ? "done" : "active"}
+            />
+            <input type="hidden" name="inboxItemId" value={row.item.id} />
+            <button
+              type="submit"
+              className="inline-flex h-7 items-center gap-1 rounded-md bg-[var(--selected-control-bg)] px-2.5 font-semibold text-[var(--selected-control-fg)] shadow-sm disabled:opacity-60"
+              disabled={isExiting}
+            >
+              {view === "active" ? (
+                <Check className="size-3" />
+              ) : (
+                <RotateCcw className="size-3" />
+              )}
+              {view === "active" ? "Done" : "Active"}
+            </button>
+          </form>
+        )}
       </div>
     </article>
   );
@@ -335,6 +346,7 @@ function KanbanCard({
 export function InboxKanban({
   sections,
   view,
+  mergedRows,
   hiddenRows,
   exitingRows,
   now,
@@ -356,6 +368,7 @@ export function InboxKanban({
 }: {
   sections: Array<{ section: InboxSectionDefinition; rows: InboxRow[] }>;
   view: SectionView;
+  mergedRows: InboxRow[];
   hiddenRows: Record<string, boolean>;
   exitingRows: Record<string, "done" | "snooze">;
   now: number;
@@ -381,15 +394,30 @@ export function InboxKanban({
   onToggleGroupSelection: (inboxItemIds: InboxItemId[]) => void;
   onPreview: (row: InboxRow) => void;
 }) {
-  const visibleSections = sections
+  const columns: Array<{
+    section: { id: KanbanColumnId; label: string };
+    rows: InboxRow[];
+  }> = [
+    ...sections,
+    ...(view === "active"
+      ? [
+          {
+            section: { id: "merged" as const, label: "Merged" },
+            rows: mergedRows,
+          },
+        ]
+      : []),
+  ];
+  const visibleSections = columns
     .toSorted((a, b) => sectionOrder[a.section.id] - sectionOrder[b.section.id])
     .map(({ section, rows }) => ({
       section,
       rows: rows.filter(
         (row) =>
-          !hiddenRows[row.item.id] &&
-          (inboxRowView(row) === view ||
-            (view === "active" && exitingRows[row.item.id])),
+          section.id === "merged" ||
+          (!hiddenRows[row.item.id] &&
+            (inboxRowView(row) === view ||
+              (view === "active" && exitingRows[row.item.id]))),
       ),
     }))
     .filter(({ rows }) => rows.length);
@@ -413,7 +441,9 @@ export function InboxKanban({
           return (
             <section key={section.id} className="min-w-0">
               <div className="mb-2 flex items-center gap-2 px-1">
-                {view === "active" && selectionEnabled ? (
+                {section.id !== "merged" &&
+                view === "active" &&
+                selectionEnabled ? (
                   <input
                     type="checkbox"
                     className="size-4 shrink-0 cursor-pointer accent-[var(--selected-control-bg)] disabled:cursor-default disabled:opacity-35"

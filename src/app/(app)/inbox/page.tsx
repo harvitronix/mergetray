@@ -5,9 +5,11 @@ import { attachAgentSessionLinks } from "@/lib/agent-sessions";
 import { codexIntegrationEnabled } from "@/lib/codex-integration";
 import { githubSyncState } from "@/lib/github-sync";
 import { inboxLayout, inboxLayoutCookieName } from "@/lib/inbox-layout";
+import { kanbanMergedHours } from "@/lib/inbox-preferences";
 import {
   githubIdentityConfigured,
   listInboxRows,
+  listMergedInboxRows,
   listRepositories,
   setUserNote as saveUserNote,
   setShipItPromotion,
@@ -37,7 +39,14 @@ export default async function InboxPage({
   const codexEnabled = codexIntegrationEnabled();
   const syncError = githubSyncState()?.error;
   const rows = repositoryId ? listInboxRows(repositoryId) : listInboxRows();
+  const mergedRows =
+    layout === "kanban"
+      ? listMergedInboxRows(kanbanMergedHours(), repositoryId)
+      : [];
   const inbox = codexEnabled ? attachAgentSessionLinks(rows) : rows;
+  const merged = codexEnabled
+    ? attachAgentSessionLinks(mergedRows)
+    : mergedRows;
   const repositories = listRepositories();
   const selectedRepository = repositoryId
     ? repositories.find((repository) => repository.id === repositoryId)
@@ -103,6 +112,7 @@ export default async function InboxPage({
       <InboxTable
         key={`${layout}-${repositoryId ?? "all"}-${selectedAuthor ?? "all"}`}
         rows={inbox}
+        mergedRows={merged}
         view={view}
         initialLayout={layout}
         selectedAuthor={selectedAuthor}
