@@ -393,11 +393,11 @@ async function setup() {
     console.log(`  Found: ${found.join(", ") || "none"}`);
     console.log(`  Not found: ${notFound.join(", ") || "none"}`);
   }
-  console.log("\nRun pnpm mergetray start, then visit http://localhost:3002.");
+  console.log("\nRun pnpm mergetray start, then visit http://localhost:51247.");
 }
 
 function appPort() {
-  const value = option("port") ?? process.argv[3] ?? "3002";
+  const value = option("port") ?? process.argv[3] ?? "51247";
   const port = Number(value);
   if (!/^\d+$/.test(value) || port < 1 || port > 65_535) {
     throw new Error("Port must be an integer from 1 to 65535.");
@@ -598,8 +598,8 @@ function help() {
 Actions:
   doctor                     Check Node, gh authentication, SQLite, and setup
   setup                      Configure repositories, webhooks, and sync
-  start [--port 3002]        Start MergeTray on localhost
-  webhooks [--port 3002]     Run configured webhook forwarding on its own
+  start [--port 51247]       Start MergeTray on localhost
+  webhooks [--port 51247]    Run configured webhook forwarding on its own
 
 Options:
   --add-repos a/b,c/d        Add repositories without an interactive prompt
@@ -608,7 +608,7 @@ Options:
   --no-webhooks              Disable webhooks during setup
   --take-over-webhooks       Replace existing GitHub CLI webhook forwarding
   --no-login                 Do not launch gh auth login
-  --port 3002                Override the app port
+  --port 51247               Override the app port
   --json                     Print doctor results as JSON`);
 }
 
