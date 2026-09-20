@@ -55,7 +55,7 @@ pnpm mergetray setup
 pnpm mergetray start
 ```
 
-Open [http://localhost:3002](http://localhost:3002) to use.
+Open [http://localhost:51247](http://localhost:51247) to use.
 
 To use another port:
 
@@ -76,8 +76,8 @@ pnpm mergetray setup --remove-repos old-owner/old-repo
 pnpm mergetray doctor
 pnpm mergetray doctor --json
 pnpm mergetray setup [--add-repos owner/repo,...] [--remove-repos owner/repo,...] [--webhooks|--no-webhooks] [--no-login]
-pnpm mergetray start [--port 3002]
-pnpm mergetray webhooks [--port 3002]
+pnpm mergetray start [--port 51247]
+pnpm mergetray webhooks [--port 51247]
 ```
 
 If webhook forwarding is already registered, MergeTray asks before replacing
