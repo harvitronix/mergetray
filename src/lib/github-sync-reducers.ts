@@ -13,6 +13,7 @@ export type GitHubPullRequest = {
   updated_at: string;
   closed_at: string | null;
   merged_at: string | null;
+  merge_commit_sha?: string | null;
   additions?: number;
   deletions?: number;
   changed_files?: number;

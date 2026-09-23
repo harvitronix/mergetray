@@ -16,6 +16,8 @@ import {
   setUserStatus,
   snoozeInboxItem,
 } from "@/lib/inbox-store";
+import { postDeployRunForInboxItem } from "@/lib/post-deploy-monitor";
+import type { PostDeployMonitorLink } from "@/lib/post-deploy-result";
 import { slopModeEnabled } from "@/lib/slop-mode";
 import { InboxTable } from "./inbox-table";
 
@@ -47,6 +49,18 @@ export default async function InboxPage({
   const merged = codexEnabled
     ? attachAgentSessionLinks(mergedRows)
     : mergedRows;
+  const postDeployRuns: Record<string, PostDeployMonitorLink> = {};
+  if (codexEnabled) {
+    for (const row of mergedRows) {
+      const run = postDeployRunForInboxItem(row.item.id);
+      if (run) {
+        postDeployRuns[row.item.id] = {
+          status: run.status,
+          threadId: run.threadId,
+        };
+      }
+    }
+  }
   const repositories = listRepositories();
   const selectedRepository = repositoryId
     ? repositories.find((repository) => repository.id === repositoryId)
@@ -113,6 +127,7 @@ export default async function InboxPage({
         key={`${layout}-${repositoryId ?? "all"}-${selectedAuthor ?? "all"}`}
         rows={inbox}
         mergedRows={merged}
+        postDeployRuns={postDeployRuns}
         view={view}
         initialLayout={layout}
         selectedAuthor={selectedAuthor}

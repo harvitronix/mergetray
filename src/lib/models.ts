@@ -8,6 +8,8 @@ export type Repository = {
   archived: boolean;
   removedAt?: number;
   localPath?: string;
+  productionUrl?: string;
+  postDeployInstructions?: string;
 };
 
 export type InboxItem = {
@@ -37,6 +39,7 @@ export type PullRequestDetails = {
   headRef: string;
   baseRef: string;
   mergedAt?: number;
+  mergeCommitSha?: string;
   autoMergeEnabled: boolean;
   reviewableDiff?: {
     additions: number;

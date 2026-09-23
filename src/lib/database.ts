@@ -20,7 +20,9 @@ const schema = `
     archived INTEGER NOT NULL,
     selected INTEGER NOT NULL DEFAULT 1,
     removed_at INTEGER,
-    local_path TEXT
+    local_path TEXT,
+    production_url TEXT,
+    post_deploy_instructions TEXT
   );
   CREATE TABLE IF NOT EXISTS inbox_items (
     id INTEGER PRIMARY KEY,
@@ -51,6 +53,7 @@ const schema = `
     head_ref TEXT NOT NULL,
     base_ref TEXT NOT NULL,
     merged_at INTEGER,
+    merge_commit_sha TEXT,
     auto_merge_enabled INTEGER NOT NULL DEFAULT 0,
     files_synced INTEGER NOT NULL DEFAULT 0
   );
@@ -130,6 +133,21 @@ const schema = `
     archived_at INTEGER,
     removed_at INTEGER
   );
+  CREATE TABLE IF NOT EXISTS post_deploy_runs (
+    id INTEGER PRIMARY KEY,
+    inbox_item_id INTEGER NOT NULL UNIQUE REFERENCES inbox_items(id) ON DELETE CASCADE,
+    status TEXT NOT NULL CHECK(status IN ('queued', 'running', 'completed', 'interrupted', 'failed')),
+    merge_sha TEXT NOT NULL,
+    thread_id TEXT,
+    turn_id TEXT,
+    worktree_path TEXT,
+    result_json TEXT,
+    error TEXT,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    completed_at INTEGER
+  );
   CREATE TABLE IF NOT EXISTS github_http_cache (
     cache_key TEXT PRIMARY KEY,
     etag TEXT,
@@ -181,11 +199,28 @@ export function getDatabase() {
       "ALTER TABLE pull_request_details ADD COLUMN files_synced INTEGER NOT NULL DEFAULT 0",
     );
   }
+  if (!detailColumns.some((column) => column.name === "merge_commit_sha")) {
+    database.exec(
+      "ALTER TABLE pull_request_details ADD COLUMN merge_commit_sha TEXT",
+    );
+  }
   const repositoryColumns = database
     .prepare("PRAGMA table_info(repositories)")
     .all() as Array<{ name: string }>;
   if (!repositoryColumns.some((column) => column.name === "local_path")) {
     database.exec("ALTER TABLE repositories ADD COLUMN local_path TEXT");
+  }
+  if (!repositoryColumns.some((column) => column.name === "production_url")) {
+    database.exec("ALTER TABLE repositories ADD COLUMN production_url TEXT");
+  }
+  if (
+    !repositoryColumns.some(
+      (column) => column.name === "post_deploy_instructions",
+    )
+  ) {
+    database.exec(
+      "ALTER TABLE repositories ADD COLUMN post_deploy_instructions TEXT",
+    );
   }
   const worktreeColumns = database
     .prepare("PRAGMA table_info(codex_worktrees)")

@@ -38,6 +38,8 @@ function repository(row: SqlRow): Repository {
     archived: Boolean(row.archived),
     removedAt: optionalNumber(row.removed_at),
     localPath: optionalString(row.local_path),
+    productionUrl: optionalString(row.production_url),
+    postDeployInstructions: optionalString(row.post_deploy_instructions),
   };
 }
 
@@ -75,6 +77,7 @@ function details(
     headRef: String(row.head_ref),
     baseRef: String(row.base_ref),
     mergedAt: optionalNumber(row.merged_at),
+    mergeCommitSha: optionalString(row.merge_commit_sha),
     autoMergeEnabled: Boolean(row.auto_merge_enabled),
   };
   if (Number(row.files_synced) === 1) {

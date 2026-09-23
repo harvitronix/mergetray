@@ -34,6 +34,7 @@ import {
   kanbanMergedHoursSetting,
 } from "@/lib/inbox-preferences";
 import { githubIdentityConfigured, listRepositories } from "@/lib/inbox-store";
+import { setRepositoryPostDeploySettings } from "@/lib/post-deploy-monitor";
 import { slopModeEnabled, slopModeSetting } from "@/lib/slop-mode";
 import { appTheme, themeCookieName } from "@/lib/theme";
 import { CleanupWorktreeButton } from "./cleanup-worktree-button";
@@ -140,6 +141,11 @@ export default async function SettingsPage({
     let error: string | undefined;
     try {
       await setRepositoryLocalPath(repositoryId, localPath);
+      setRepositoryPostDeploySettings(
+        repositoryId,
+        String(formData.get("productionUrl") ?? ""),
+        String(formData.get("postDeployInstructions") ?? ""),
+      );
     } catch (updateError) {
       error =
         updateError instanceof Error
@@ -345,7 +351,7 @@ export default async function SettingsPage({
         ) : null}
         {query.repositoryPathUpdated ? (
           <Notice tone="success" className="mt-5">
-            Local checkout saved.
+            Repository environment saved.
           </Notice>
         ) : null}
         {query.repositoryPathError ? (
@@ -392,41 +398,63 @@ export default async function SettingsPage({
 
         {repositories.length ? (
           <div className="mt-5 border-t border-foreground/10 pt-5">
-            <h3 className="text-sm font-semibold">Local checkouts</h3>
+            <h3 className="text-sm font-semibold">Repository environments</h3>
             <p className="mt-1 text-sm text-foreground/55">
-              MergeTray uses these repositories to create replacement worktrees
-              for unavailable PR tasks.
+              Local checkouts support Codex worktrees. Production details are
+              passed to post-deploy capability audits.
             </p>
             <div className="mt-3 grid gap-3">
               {repositories.map((repository) => (
                 <form
                   key={repository.id}
                   action={updateRepositoryPath}
-                  className="app-inset-surface grid gap-2 px-3 py-3 sm:grid-cols-[minmax(10rem,0.45fr)_minmax(16rem,1fr)_auto] sm:items-end"
+                  className="app-inset-surface grid gap-3 px-3 py-3"
                 >
                   <input
                     type="hidden"
                     name="repositoryId"
                     value={repository.id}
                   />
-                  <div className="grid gap-1 text-xs font-medium">
-                    Repository
-                    <span className="h-9 truncate py-2 font-mono text-sm">
-                      {repository.fullName}
-                    </span>
+                  <div className="grid gap-3 sm:grid-cols-[minmax(10rem,0.4fr)_minmax(16rem,1fr)]">
+                    <div className="grid gap-1 text-xs font-medium">
+                      Repository
+                      <span className="h-9 truncate py-2 font-mono text-sm">
+                        {repository.fullName}
+                      </span>
+                    </div>
+                    <label className="grid gap-1 text-xs font-medium">
+                      Local checkout path
+                      <input
+                        name="localPath"
+                        defaultValue={repository.localPath ?? ""}
+                        placeholder={`/path/to/${repository.name}`}
+                        className="h-9 min-w-0 rounded-md border border-foreground/10 bg-background px-3 font-mono text-sm"
+                      />
+                    </label>
                   </div>
                   <label className="grid gap-1 text-xs font-medium">
-                    Local checkout path
+                    Production URL
                     <input
-                      name="localPath"
-                      defaultValue={repository.localPath ?? ""}
-                      placeholder={`/path/to/${repository.name}`}
-                      className="h-9 min-w-0 rounded-md border border-foreground/10 bg-background px-3 font-mono text-sm"
+                      name="productionUrl"
+                      type="url"
+                      defaultValue={repository.productionUrl ?? ""}
+                      placeholder="https://app.example.com"
+                      className="h-9 min-w-0 rounded-md border border-foreground/10 bg-background px-3 text-sm"
+                    />
+                  </label>
+                  <label className="grid gap-1 text-xs font-medium">
+                    Post-deploy instructions
+                    <textarea
+                      name="postDeployInstructions"
+                      defaultValue={repository.postDeployInstructions ?? ""}
+                      rows={3}
+                      placeholder="How to identify the production deployment and what can be checked safely."
+                      className="resize-y rounded-md border border-foreground/10 bg-background px-3 py-2 text-sm"
                     />
                   </label>
                   <button
                     type="submit"
-                    className="h-9 rounded-md border border-foreground/10 bg-background/70 px-3 text-xs font-semibold"
+                    className="h-9 justify-self-start rounded-md border border-foreground/10 bg-background/70 px-3 text-xs font-semibold"
                   >
                     Save
                   </button>
