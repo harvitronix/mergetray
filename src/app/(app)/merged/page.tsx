@@ -1,6 +1,9 @@
 import { ExternalLink, GitMerge } from "lucide-react";
 import { AppPage, Surface } from "@/components/app-ui";
+import { codexIntegrationEnabled } from "@/lib/codex-integration";
 import { listRepositories, recentlyMerged } from "@/lib/inbox-store";
+import { postDeployRunForInboxItem } from "@/lib/post-deploy-monitor";
+import { PostDeployAudit } from "./post-deploy-audit";
 
 function mergedAgo(mergedAt: number) {
   const minutes = Math.max(1, Math.floor((Date.now() - mergedAt) / 60_000));
@@ -22,6 +25,7 @@ export default async function RecentlyMergedPage({
   const repositoryId = repo || undefined;
   const rows = recentlyMerged(repositoryId);
   const repositories = listRepositories();
+  const codexEnabled = codexIntegrationEnabled();
 
   return (
     <AppPage>
@@ -68,31 +72,48 @@ export default async function RecentlyMergedPage({
               const mergedAt = pullRequestDetails.mergedAt ?? item.closedAt;
 
               return (
-                <a
+                <div
                   key={item.id}
-                  href={item.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center gap-3 px-4 py-3 transition hover:bg-foreground/[0.03]"
+                  className="px-4 py-3 transition hover:bg-foreground/[0.03]"
                 >
-                  <GitMerge className="size-4 shrink-0 text-emerald-600" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{item.title}</p>
-                    <p className="mt-1 truncate text-xs text-foreground/50">
-                      {repository.fullName} #{item.number} by @
-                      {item.authorLogin}
-                    </p>
-                  </div>
-                  {mergedAt ? (
-                    <time
-                      dateTime={new Date(mergedAt).toISOString()}
-                      className="shrink-0 text-xs text-foreground/50"
-                    >
-                      {mergedAgo(mergedAt)}
-                    </time>
-                  ) : null}
-                  <ExternalLink className="size-3.5 shrink-0 text-foreground/35" />
-                </a>
+                  <a
+                    href={item.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-3"
+                  >
+                    <GitMerge className="size-4 shrink-0 text-emerald-600" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">
+                        {item.title}
+                      </p>
+                      <p className="mt-1 truncate text-xs text-foreground/50">
+                        {repository.fullName} #{item.number} by @
+                        {item.authorLogin}
+                      </p>
+                    </div>
+                    {mergedAt ? (
+                      <time
+                        dateTime={new Date(mergedAt).toISOString()}
+                        className="shrink-0 text-xs text-foreground/50"
+                      >
+                        {mergedAgo(mergedAt)}
+                      </time>
+                    ) : null}
+                    <ExternalLink className="size-3.5 shrink-0 text-foreground/35" />
+                  </a>
+                  <PostDeployAudit
+                    inboxItemId={item.id}
+                    initialRun={postDeployRunForInboxItem(item.id)}
+                    disabledReason={
+                      !codexEnabled
+                        ? "Enable Codex in Settings first."
+                        : !repository.localPath
+                          ? `Set a local checkout for ${repository.fullName} first.`
+                          : undefined
+                    }
+                  />
+                </div>
               );
             })}
           </div>

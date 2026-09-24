@@ -39,6 +39,10 @@ import type {
   CodexRecoveryOption,
   CodexTaskSetupStage,
 } from "@/lib/codex-worktrees";
+import {
+  type CapabilityAuditResult,
+  parseCapabilityAuditResult,
+} from "@/lib/post-deploy-result";
 
 type ChatMessage = ThreadMessageLike & { id: string };
 type MessageKind = "message" | "reasoning";
@@ -122,11 +126,11 @@ const setupStatus: Record<SetupStage, { label: string; detail: string }> = {
 
 function UserMessage() {
   return (
-    <MessagePrimitive.Root className="flex min-w-0 justify-end">
+    <div className="flex min-w-0 justify-end">
       <div className="min-w-0 max-w-[85%] [overflow-wrap:anywhere] rounded-xl bg-[var(--selected-control-bg)] px-4 py-3 text-sm text-[var(--selected-control-fg)]">
         <MessagePrimitive.Content />
       </div>
-    </MessagePrimitive.Root>
+    </div>
   );
 }
 
@@ -136,6 +140,62 @@ function MarkdownText() {
       remarkPlugins={[remarkGfm]}
       className="codex-markdown"
     />
+  );
+}
+
+function auditTone(overall: CapabilityAuditResult["overall"]) {
+  if (overall === "ready") return "text-[var(--success-text)]";
+  if (overall === "partial") return "text-[var(--warning-text)]";
+  return "text-[var(--danger-text)]";
+}
+
+function checkTone(status: CapabilityAuditResult["checks"][number]["status"]) {
+  if (status === "available") return "text-[var(--success-text)]";
+  if (status === "error") return "text-[var(--danger-text)]";
+  return "text-foreground/50";
+}
+
+function AuditResult({ result }: { result: CapabilityAuditResult }) {
+  return (
+    <div className="flex min-w-0 gap-3">
+      <span className="app-inset-surface grid size-8 shrink-0 place-items-center">
+        <Bot className="size-4" />
+      </span>
+      <div className="app-inset-surface min-w-0 flex-1 overflow-hidden p-4 text-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="font-semibold">Post-deploy audit</p>
+          <span
+            className={`text-xs font-semibold capitalize ${auditTone(result.overall)}`}
+          >
+            {result.overall}
+          </span>
+        </div>
+        <p className="mt-2 leading-6 text-foreground/70">{result.summary}</p>
+        <div className="mt-4 divide-y divide-foreground/10 border-y border-foreground/10">
+          {result.checks.map((check) => (
+            <div key={check.capability} className="py-3">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <p className="font-medium capitalize">
+                  {check.capability.replaceAll("_", " ")}
+                </p>
+                <span
+                  className={`text-xs font-medium capitalize ${checkTone(check.status)}`}
+                >
+                  {check.status.replaceAll("_", " ")}
+                </span>
+              </div>
+              <p className="mt-1 leading-5 text-foreground/55">
+                {check.evidence}
+              </p>
+            </div>
+          ))}
+        </div>
+        <p className="mt-3 leading-5 text-foreground/65">
+          <span className="font-medium text-foreground">Next:</span>{" "}
+          {result.nextStep}
+        </p>
+      </div>
+    </div>
   );
 }
 
@@ -149,11 +209,17 @@ function AssistantMessage() {
   const isRunning = useAuiState(
     (state) => state.message.status?.type === "running",
   );
+  const auditResult = useAuiState(
+    (state) =>
+      state.message.metadata.custom.auditResult as
+        | CapabilityAuditResult
+        | undefined,
+  );
   const isProgress = kind === "reasoning" || phase === "commentary";
 
   if (isProgress) {
     return (
-      <MessagePrimitive.Root className="min-w-0">
+      <div className="min-w-0">
         <details className="group min-w-0 rounded-md border border-foreground/10 bg-background/45 px-3 py-2 text-sm text-foreground/60">
           <summary className="flex cursor-pointer list-none items-center gap-2 font-medium text-foreground/55">
             {kind === "reasoning" ? (
@@ -171,19 +237,21 @@ function AssistantMessage() {
             <MessagePrimitive.Content components={{ Text: MarkdownText }} />
           </div>
         </details>
-      </MessagePrimitive.Root>
+      </div>
     );
   }
 
+  if (auditResult) return <AuditResult result={auditResult} />;
+
   return (
-    <MessagePrimitive.Root className="flex min-w-0 gap-3">
+    <div className="flex min-w-0 gap-3">
       <span className="app-inset-surface grid size-8 shrink-0 place-items-center">
         <Bot className="size-4" />
       </span>
       <div className="min-w-0 flex-1 py-1 text-sm leading-6">
         <MessagePrimitive.Content components={{ Text: MarkdownText }} />
       </div>
-    </MessagePrimitive.Root>
+    </div>
   );
 }
 
@@ -227,6 +295,10 @@ function messageText(message: AppendMessage) {
 }
 
 function chatMessage(message: CodexChatMessage, running = false): ChatMessage {
+  const auditResult =
+    message.role === "assistant" && !running
+      ? parseCapabilityAuditResult(message.content)
+      : undefined;
   return {
     ...message,
     metadata:
@@ -235,6 +307,7 @@ function chatMessage(message: CodexChatMessage, running = false): ChatMessage {
             custom: {
               kind: message.kind ?? "message",
               phase: message.phase ?? null,
+              auditResult,
             },
           }
         : undefined,

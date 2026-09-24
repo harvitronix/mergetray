@@ -347,13 +347,14 @@ async function hydratePullRequest(
     db.prepare(
       `INSERT INTO pull_request_details(
         inbox_item_id, draft, additions, deletions, changed_files,
-        head_sha, head_ref, base_ref, merged_at, files_synced
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        head_sha, head_ref, base_ref, merged_at, merge_commit_sha, files_synced
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(inbox_item_id) DO UPDATE SET
         draft = excluded.draft, additions = excluded.additions,
         deletions = excluded.deletions, changed_files = excluded.changed_files,
         head_sha = excluded.head_sha, head_ref = excluded.head_ref,
         base_ref = excluded.base_ref, merged_at = excluded.merged_at,
+        merge_commit_sha = excluded.merge_commit_sha,
         files_synced = excluded.files_synced`,
     ).run(
       itemId,
@@ -365,6 +366,7 @@ async function hydratePullRequest(
       live.head.ref,
       live.base.ref,
       timestamp(live.merged_at) ?? null,
+      live.merge_commit_sha ?? null,
       live.changed_files === files.length ? 1 : -1,
     );
     replacePullRequestFiles(itemId, files);
@@ -381,6 +383,7 @@ type VolatilePullRequest = {
   updatedAt: string;
   closedAt?: string | null;
   mergedAt?: string | null;
+  mergeCommit?: { oid: string } | null;
   headRefOid: string;
   autoMergeRequest?: { enabledAt: string } | null;
   reviewRequests: {
@@ -436,7 +439,7 @@ async function refreshVolatilePullRequests(
       .map(
         (_, index) => `p${index}: node(id: $id${index}) {
           ... on PullRequest {
-            id state updatedAt closedAt mergedAt headRefOid
+            id state updatedAt closedAt mergedAt headRefOid mergeCommit { oid }
             autoMergeRequest { enabledAt }
             reviewRequests(first: 100) {
               nodes { requestedReviewer {
@@ -588,10 +591,12 @@ async function refreshVolatilePullRequests(
         );
         db.prepare(
           `UPDATE pull_request_details
-           SET merged_at = ?, auto_merge_enabled = ?
+           SET merged_at = ?, merge_commit_sha = COALESCE(?, merge_commit_sha),
+               auto_merge_enabled = ?
            WHERE inbox_item_id = ?`,
         ).run(
           timestamp(live.mergedAt) ?? null,
+          live.mergeCommit?.oid ?? null,
           Number(autoMergeEnabled),
           inboxItemId,
         );

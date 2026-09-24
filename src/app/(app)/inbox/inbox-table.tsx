@@ -22,6 +22,7 @@ import {
 } from "@/lib/inbox-section-rules";
 import { groupInboxRows } from "@/lib/inbox-stacks";
 import type { InboxRow } from "@/lib/models";
+import type { PostDeployMonitorLink } from "@/lib/post-deploy-result";
 import { InboxBulkActions } from "./inbox-bulk-actions";
 import { InboxKanban } from "./inbox-kanban";
 import { InboxRowCard } from "./inbox-row-card";
@@ -60,6 +61,7 @@ function emptyRowsByGroup() {
 export function InboxTable({
   rows,
   mergedRows,
+  postDeployRuns,
   view,
   initialLayout,
   selectedAuthor,
@@ -76,6 +78,7 @@ export function InboxTable({
 }: {
   rows: InboxRow[];
   mergedRows: InboxRow[];
+  postDeployRuns: Record<string, PostDeployMonitorLink>;
   view: SectionView;
   initialLayout: InboxLayout;
   selectedAuthor?: string;
@@ -570,6 +573,7 @@ export function InboxTable({
             }))}
             view={inboxView}
             mergedRows={filteredMergedRows}
+            postDeployRuns={postDeployRuns}
             hiddenRows={hiddenRows}
             exitingRows={exitingRows}
             now={now}

@@ -1,12 +1,15 @@
 "use client";
 
 import {
+  Bot,
   Check,
   ChevronDown,
   CircleDot,
   Clock3,
+  ExternalLink,
   GitMerge,
   Layers3,
+  LoaderCircle,
   Minus,
   PanelRightOpen,
   Rocket,
@@ -15,6 +18,7 @@ import {
   ThumbsUp,
   X,
 } from "lucide-react";
+import Link from "next/link";
 import { type FormEvent, useEffect, useRef } from "react";
 import {
   hasOpenChangeRequest,
@@ -25,6 +29,7 @@ import {
   nextInboxAction,
 } from "@/lib/inbox-section-rules";
 import type { InboxRow } from "@/lib/models";
+import type { PostDeployMonitorLink } from "@/lib/post-deploy-result";
 import { inboxRowView, type SectionView } from "./inbox-section";
 import { snoozeOptions } from "./inbox-snooze";
 
@@ -104,8 +109,66 @@ function updatedLabel(value: number, timeZone: string) {
   }).format(new Date(value));
 }
 
+function monitorPresentation(status: PostDeployMonitorLink["status"]) {
+  if (status === "queued" || status === "running") {
+    return {
+      label: status === "queued" ? "Monitor starting" : "Monitor running",
+      style: "border-sky-500/25 bg-sky-500/10 text-[var(--info-text)]",
+      active: true,
+    };
+  }
+  if (status === "completed") {
+    return {
+      label: "Monitor complete",
+      style:
+        "border-emerald-500/20 bg-emerald-500/8 text-[var(--success-text)]",
+      active: false,
+    };
+  }
+  return {
+    label: status === "failed" ? "Monitor failed" : "Monitor interrupted",
+    style: "border-red-500/20 bg-red-500/8 text-[var(--danger-text)]",
+    active: false,
+  };
+}
+
+function PostDeployMonitor({ monitor }: { monitor: PostDeployMonitorLink }) {
+  const presentation = monitorPresentation(monitor.status);
+  const content = (
+    <>
+      {presentation.active ? (
+        <LoaderCircle className="size-3.5 shrink-0 animate-spin" />
+      ) : (
+        <Bot className="size-3.5 shrink-0" />
+      )}
+      <span className="font-semibold">{presentation.label}</span>
+      {monitor.threadId ? (
+        <span className="ml-auto inline-flex items-center gap-1 font-medium">
+          View in Codex
+          <ExternalLink className="size-3" />
+        </span>
+      ) : null}
+    </>
+  );
+  const className = `mx-3.5 mb-3 flex min-h-9 items-center gap-2 rounded-md border px-2.5 py-2 text-[11px] ${presentation.style}`;
+
+  return monitor.threadId ? (
+    <Link
+      href={`/codex?thread=${encodeURIComponent(monitor.threadId)}`}
+      className={className}
+    >
+      {content}
+    </Link>
+  ) : (
+    <div className={className} role="status">
+      {content}
+    </div>
+  );
+}
+
 function KanbanCard({
   row,
+  postDeployMonitor,
   view,
   now,
   timeZone,
@@ -125,6 +188,7 @@ function KanbanCard({
   onPreview,
 }: {
   row: InboxRow;
+  postDeployMonitor?: PostDeployMonitorLink;
   view: SectionView;
   now: number;
   timeZone: string;
@@ -226,6 +290,9 @@ function KanbanCard({
           </span>
         ) : null}
       </button>
+      {isMerged && postDeployMonitor ? (
+        <PostDeployMonitor monitor={postDeployMonitor} />
+      ) : null}
       <div className="flex items-center gap-2 border-t border-foreground/8 px-3.5 py-2.5 text-[11px] text-foreground/45">
         {!isMerged && view === "active" && selectionEnabled ? (
           <input
@@ -347,6 +414,7 @@ export function InboxKanban({
   sections,
   view,
   mergedRows,
+  postDeployRuns,
   hiddenRows,
   exitingRows,
   now,
@@ -369,6 +437,7 @@ export function InboxKanban({
   sections: Array<{ section: InboxSectionDefinition; rows: InboxRow[] }>;
   view: SectionView;
   mergedRows: InboxRow[];
+  postDeployRuns: Record<string, PostDeployMonitorLink>;
   hiddenRows: Record<string, boolean>;
   exitingRows: Record<string, "done" | "snooze">;
   now: number;
@@ -472,6 +541,7 @@ export function InboxKanban({
                   <KanbanCard
                     key={row.item.id}
                     row={row}
+                    postDeployMonitor={postDeployRuns[row.item.id]}
                     view={view}
                     now={now}
                     timeZone={timeZone}
