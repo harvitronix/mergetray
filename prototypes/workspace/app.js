@@ -190,6 +190,98 @@ const tasks = [
       "Lead with work people can recognize, rather than broad technology promises.",
   },
 ];
+const projects = [
+  {
+    id: "coastline",
+    name: "Coastline",
+    repo: "coastline / next",
+    folder: "/demo/projects/coastline-next",
+    target: "web",
+  },
+  {
+    id: "coast-ai",
+    name: "Coast.ai",
+    repo: "coastline / coast.ai",
+    folder: "/demo/projects/coast-ai",
+    target: "web",
+  },
+  {
+    id: "trail",
+    name: "Trail Notes",
+    repo: "personal / trail-notes",
+    folder: "/demo/projects/trail-notes",
+    target: "simulator",
+  },
+];
+for (const t of tasks)
+  t.project = ["coast", "story"].includes(t.id) ? "coast-ai" : "coastline";
+tasks.push({
+  id: "offline",
+  parent: null,
+  project: "trail",
+  title: "Take trail notes offline",
+  status: "review",
+  repo: "personal / trail-notes",
+  issue: "GH-42",
+  source: "GitHub",
+  age: "yesterday",
+  description:
+    "Save a trail note without a connection and sync it when the phone comes back online.",
+  summary:
+    "The offline queue is implemented. You left the iPhone simulator running to check the airplane-mode flow. No PR has been opened yet.",
+  next: "Open the simulator and try saving a note offline.",
+  decision:
+    "Always save locally first. Show sync status without interrupting note taking.",
+});
+const environments = {
+  checkout: {
+    owner: "checkout",
+    path: "/demo/workspaces/checkout",
+    branch: "matt/package-comparison",
+    kind: "Isolated working folder",
+    running: false,
+    port: 3101,
+    log: [],
+  },
+  instructors: {
+    owner: "instructors",
+    path: "/demo/workspaces/instructors",
+    branch: "matt/weekly-calendar",
+    kind: "Isolated working folder",
+    running: true,
+    port: 3102,
+    log: [],
+  },
+  offline: {
+    owner: "offline",
+    path: "/demo/workspaces/trail-offline",
+    branch: "offline-notes",
+    kind: "Isolated working folder",
+    running: true,
+    port: 0,
+    log: [],
+  },
+};
+const sampleIssues = [
+  {
+    id: "COA-274",
+    source: "Linear",
+    url: "https://linear.app/coastline/issue/COA-274",
+    project: "coastline",
+    title: "Explain cancellation terms",
+    description:
+      "Show the cancellation window before students confirm a booking. Keep the language short and link to the full policy.",
+  },
+  {
+    id: "GH-43",
+    source: "GitHub",
+    url: "https://github.com/example/trail-notes/issues/43",
+    project: "trail",
+    title: "Export a trail as GPX",
+    description:
+      "Let hikers export a recorded trail as a GPX file from the trail detail screen. Include route points and elevation.",
+  },
+];
 const sessions = [
   {
     id: "s1",
@@ -351,8 +443,9 @@ const state = {
   scope: "task",
   expanded: new Set(["checkout", "packages", "instructors", "coast"]),
   conversations: {},
-  dev: false,
-  filter: "all",
+  project: "all",
+  grouping: "project",
+  importedIssue: null,
   session: null,
   sessionMode: "chat",
 };
@@ -386,23 +479,80 @@ function openTask(id, tab = "overview") {
   state.tab = tab;
   state.scope = "task";
   let t = tasks.find((t) => t.id === id);
+  if (state.project !== "all" && state.project !== t.project)
+    state.project = t.project;
   while (t?.parent) {
     state.expanded.add(t.parent);
     t = tasks.find((x) => x.id === t.parent);
   }
   render();
 }
-function tree(id = null, depth = 0) {
-  return children(id)
+function projectFor(t) {
+  return projects.find((p) => p.id === t.project);
+}
+function inProject(t) {
+  return state.project === "all" || t.project === state.project;
+}
+function readiness(t) {
+  const statuses = descendants(t.id).map(
+    (id) => tasks.find((x) => x.id === id).status,
+  );
+  return ["blocked", "review", "working", "idea", "done"].find((status) =>
+    statuses.includes(status),
+  );
+}
+function environmentFor(t) {
+  if (environments[t.id]) return environments[t.id];
+  return t.parent ? environmentFor(tasks.find((x) => x.id === t.parent)) : null;
+}
+function prepareEnvironment(t, separate = false) {
+  if (!separate && environmentFor(t)) return environmentFor(t);
+  environments[t.id] = {
+    owner: t.id,
+    path: "/demo/workspaces/" + t.id,
+    branch: "stream/" + t.id,
+    kind: "Isolated working folder",
+    running: false,
+    port: 3100 + Object.keys(environments).length + 1,
+    log: [],
+  };
+  event(
+    t.id,
+    "Working folder prepared",
+    "A sample isolated folder is now linked to this stream.",
+    "folder",
+  );
+  return environments[t.id];
+}
+function tree(id = null, depth = 0, items = children(id)) {
+  return items
     .map((t) => {
       const kids = children(t.id);
       return `<div class="tree-row ${state.view === "task" && state.task === t.id ? "selected" : ""}" style="padding-left:${depth * 13 + 3}px">${kids.length ? `<button class="expander" data-expand="${t.id}" aria-label="${state.expanded.has(t.id) ? "Collapse" : "Expand"} ${esc(t.title)}" aria-expanded="${state.expanded.has(t.id)}">${icon(state.expanded.has(t.id) ? "down" : "chevron")}</button>` : '<span class="expander"></span>'}<button class="task-name" data-task="${t.id}"><span class="marker ${t.status}"></span><span>${esc(t.title)}</span></button></div>${kids.length && state.expanded.has(t.id) ? tree(t.id, depth + 1) : ""}`;
     })
     .join("");
 }
+function sidebarStreams() {
+  const roots = children(null).filter(inProject);
+  const groups =
+    state.grouping === "project"
+      ? projects.map((p) => [p.name, roots.filter((t) => t.project === p.id)])
+      : ["blocked", "review", "working", "idea", "done"].map((status) => [
+          statusNames[status],
+          roots.filter((t) => readiness(t) === status),
+        ]);
+  return groups
+    .filter(([, items]) => items.length)
+    .map(
+      ([name, items]) =>
+        `<div class="project-heading">${icon(state.grouping === "project" ? "folder" : "circle")} ${esc(name)}<span>${items.length}</span></div>${tree(null, 0, items)}`,
+    )
+    .join("");
+}
 function render() {
+  const env = environmentFor(current());
   $("#app").innerHTML =
-    `<div class="app-shell"><header class="titlebar"><div class="traffic" aria-hidden="true"><i></i><i></i><i></i></div><button class="icon-button mobile-menu" data-action="menu" aria-label="Toggle navigation">${icon("menu")}</button><button class="icon-button" data-action="home" aria-label="Go to home">${icon("home")}</button><span class="title">MergeTray <span style="color:#b8bdc5;padding:0 7px">/</span> Harvey’s workspace</span><div class="title-actions"><button class="icon-button" data-action="search" aria-label="Search workspace">${icon("search")}</button><button class="icon-button" data-action="toggle-companion" aria-label="Toggle companion">${icon("panel")}</button></div></header><aside class="sidebar"><div class="brand"><span class="brand-mark">${icon("branch")}</span>MergeTray<small>LAB</small></div><button class="nav ${state.view === "home" ? "active" : ""}" data-action="home">${icon("home")} Home</button><button class="nav" data-action="search">${icon("search")} Search <span class="shortcut">⌘ K</span></button><button class="nav ${state.view === "attention" ? "active" : ""}" data-action="attention">${icon("circle")} Needs you <span class="count">${tasks.filter((t) => ["review", "blocked"].includes(t.status) && t.parent).length}</span></button><button class="nav ${state.view === "activity" ? "active" : ""}" data-action="activity">${icon("activity")} Activity</button><div class="section-label">Workstreams<button class="icon-button" data-action="new" aria-label="New workstream">${icon("plus")}</button></div>${tree()}<button class="nav" style="margin-top:14px;color:#9298a4" data-action="new">${icon("plus")} Capture an idea</button><div class="sidebar-bottom"><button class="nav ${state.view === "hooks" ? "active" : ""}" data-action="hooks">${icon("bolt")} Hooks & automations</button><button class="nav ${state.view === "settings" ? "active" : ""}" data-action="settings">${icon("gear")} Workspace settings</button><div class="profile"><span class="avatar">H</span><div>Harvey<small>Personal workspace</small></div></div></div></aside><div class="main-region"><main class="main" id="main">${mainView()}</main><aside class="companion ${state.companion ? "" : "hidden"}" aria-label="Workspace companion">${companionView()}</aside></div><footer class="statusbar"><div class="left"><span class="dot"></span>Local workspace<span style="padding:0 4px;color:#c6cad1">|</span><span>Prototype · sample data</span></div><div class="right">${icon("terminal")}<button data-action="dev">${state.dev ? "Dev preview running" : "Dev preview stopped"}</button><span style="padding:0 4px;color:#c6cad1">|</span><button data-action="reset">Reset demo</button></div></footer></div>`;
+    `<div class="app-shell"><header class="titlebar"><div class="traffic" aria-hidden="true"><i></i><i></i><i></i></div><button class="icon-button mobile-menu" data-action="menu" aria-label="Toggle navigation">${icon("menu")}</button><button class="icon-button" data-action="home" aria-label="Go to overview">${icon("home")}</button><span class="title">MergeTray <span style="color:#b8bdc5;padding:0 7px">/</span> Harvey’s workspace</span><div class="title-actions"><button class="icon-button" data-action="search" aria-label="Search workspace">${icon("search")}</button><button class="icon-button" data-action="toggle-companion" aria-label="Toggle companion">${icon("panel")}</button></div></header><aside class="sidebar"><div class="brand"><span class="brand-mark">${icon("branch")}</span>MergeTray<small>LAB</small></div><label class="project-selector">${icon("folder")}<select id="project-filter" aria-label="Project filter"><option value="all">All projects</option>${projects.map((p) => `<option value="${p.id}" ${state.project === p.id ? "selected" : ""}>${esc(p.name)}</option>`).join("")}</select></label><button class="nav ${state.view === "home" ? "active" : ""}" data-action="home">${icon("home")} Overview</button><div class="section-label">Streams<button class="icon-button" data-action="new" aria-label="New stream">${icon("plus")}</button></div><div class="segmented sidebar-grouping"><button data-group="project" class="${state.grouping === "project" ? "active" : ""}">By project</button><button data-group="readiness" class="${state.grouping === "readiness" ? "active" : ""}">By readiness</button></div>${sidebarStreams()}<div class="sidebar-bottom"><div class="sidebar-tools"><button class="icon-button" data-action="hooks" aria-label="Hooks and automations" title="Hooks and automations">${icon("bolt")}</button><button class="icon-button" data-action="search" aria-label="Search streams" title="Search · ⌘ K">${icon("search")}</button><button class="icon-button" data-action="settings" aria-label="Workspace settings" title="Workspace settings">${icon("gear")}</button></div><div class="profile"><span class="avatar">H</span><div>Harvey<small>Personal workspace</small></div></div></div></aside><div class="main-region"><main class="main" id="main">${mainView()}</main><aside class="companion ${state.companion ? "" : "hidden"}" aria-label="Workspace companion">${companionView()}</aside></div><footer class="statusbar"><div class="left"><span class="dot"></span>Local workspace<span style="padding:0 4px;color:#c6cad1">|</span><span>Prototype · sample data</span></div><div class="right">${state.view === "task" ? `${icon("terminal")}<button data-action="terminal">Stream terminal</button><span style="padding:0 4px;color:#c6cad1">|</span><button data-action="dev">${env?.running ? "Dev environment running" : "Dev environment"}</button><span style="padding:0 4px;color:#c6cad1">|</span>` : ""}<button data-action="reset">Reset demo</button></div></footer></div>`;
   const chat = $(".companion-body");
   if (chat) chat.scrollTop = chat.scrollHeight;
 }
@@ -411,46 +561,58 @@ function mainView() {
   if (state.view === "hooks") return hooksView();
   if (state.view === "settings") return settingsView();
   if (state.view === "activity")
-    return `<div class="content"><div class="page-heading"><div><div class="eyebrow">Across your workspace</div><h1>Activity</h1><p>The work keeps moving. Here’s what changed.</p></div></div>${timeline(events)}</div>`;
+    return `<div class="content"><div class="page-heading"><div><div class="eyebrow">Across your workspace</div><h1>Activity</h1><p>The work keeps moving. Here’s what changed.</p></div></div>${timeline(events.filter((e) => inProject(tasks.find((t) => t.id === e.task))))}</div>`;
   if (state.view === "attention")
     return `<div class="content"><div class="page-heading"><div><div class="eyebrow">Your next moves</div><h1>Needs you</h1><p>Decisions and reviews that move the work forward.</p></div></div>${attention()}<div class="note">Everything else can keep moving. These are the places where your input makes a difference.</div></div>`;
   return homeView();
 }
 function attention() {
   const items = tasks.filter(
-    (t) => t.parent && ["review", "blocked"].includes(t.status),
+    (t) =>
+      inProject(t) &&
+      ["review", "blocked"].includes(t.status) &&
+      (!children(t.id).length || taskSessions(t.id).length > 0),
   );
   return items.length
-    ? `<div class="attention-list">${items.map((t) => `<button class="attention-row" data-task="${t.id}"><span class="attention-icon ${t.status === "review" ? "" : "blue"}">${icon(t.status === "review" ? "pr" : "chat")}</span><div><strong>${esc(t.status === "review" ? "Review: " + t.title : t.title)}</strong><small>${esc(t.status === "review" ? (taskPRs(t.id).some((p) => p.state === "review") ? "Checks passed. The preview is ready." : "The completed session is ready to inspect.") : "A product decision is waiting for you.")}</small></div><span class="trailing">${esc(tasks.find((p) => p.id === t.parent).title)}${icon("chevron")}</span></button>`).join("")}</div>`
+    ? `<div class="attention-list">${items.map((t) => `<button class="attention-row" data-task="${t.id}"><span class="attention-icon ${t.status === "review" ? "" : "blue"}">${icon(t.status === "review" ? "pr" : "chat")}</span><div><strong>${esc(t.status === "review" ? "Review: " + t.title : t.title)}</strong><small>${esc(t.status === "review" ? (taskPRs(t.id).some((p) => p.state === "review") ? "Checks passed. The preview is ready." : "The completed session is ready to inspect.") : "A product decision is waiting for you.")}</small></div><span class="trailing">${esc(projectFor(t).name)}${icon("chevron")}</span></button>`).join("")}</div>`
     : '<div class="empty">' +
         icon("check") +
         "<h3>You’re all caught up</h3><p>No decisions or reviews are waiting for you.</p></div>";
 }
 function homeView() {
-  return `<div class="content"><div class="page-heading"><div><div class="eyebrow">Thursday, September 24</div><h1>A little context. A clear next step.</h1><p>${children(null).length} workstreams. One place to pick them back up.</p></div>${button("New task", "new", "plus")}</div><section class="resume-card"><div class="resume-top">${icon("clock")} PICK UP WHERE YOU LEFT OFF <span style="margin-left:auto;font-size:10px">18 days away</span></div><h2>A smoother checkout</h2><p>${esc(currentCheckoutBrief())}</p><div class="resume-bottom"><button class="btn primary" data-task="checkout">Continue this workstream ${icon("arrow")}</button><button class="btn quiet" data-action="catch-up-checkout">${icon("spark")} Catch me up</button></div></section><div class="block-heading"><h2>Needs your attention</h2><small>${tasks.filter((t) => t.parent && ["review", "blocked"].includes(t.status)).length} things to move forward</small></div>${attention()}<div class="block-heading"><h2>Your workstreams</h2><small>At your pace</small></div><div class="workspace-grid">${children(
-    null,
-  )
-    .map((t, i) => {
-      const desc = descendants(t.id)
-        .slice(1)
-        .map((id) => tasks.find((x) => x.id === id));
-      const done = desc.filter((x) => x.status === "done").length;
-      return `<button class="workspace-card" data-task="${t.id}"><div class="work-icon ${["blue", "orange", ""][i % 3]}">${icon(["layers", "clock", "idea"][i % 3])}</div><h3>${esc(t.title)}</h3><p>${esc(t.id === "checkout" ? "A clearer path from package to payment." : t.id === "instructors" ? "Better schedules, fewer surprises." : t.description)}</p><div class="progress-bar"><i style="width:${desc.length ? (done / desc.length) * 100 : 0}%"></i></div><div class="card-foot"><span>${done} of ${desc.length} subtasks complete</span><span>${esc(statusNames[t.status])}</span></div></button>`;
-    })
+  const roots = children(null).filter(inProject);
+  const featured = roots[0];
+  const groups =
+    state.grouping === "project"
+      ? projects.map((p) => [p.name, roots.filter((t) => t.project === p.id)])
+      : ["blocked", "review", "working", "idea", "done"].map((status) => [
+          statusNames[status],
+          roots.filter((t) => readiness(t) === status),
+        ]);
+  return `<div class="content"><div class="page-heading"><div><div class="eyebrow">${state.project === "all" ? "Across all your projects" : esc(projects.find((p) => p.id === state.project).name)}</div><h1>A little context. A clear next step.</h1><p>${roots.length} streams. One place to pick them back up.</p></div></div><div class="home-controls"><div class="segmented"><button class="active" data-action="home">Overview</button><button data-action="attention">Needs you</button><button data-action="activity">Activity</button></div><span>${state.grouping === "project" ? "Grouped by project" : "Ordered by readiness"}</span></div>${featured ? `<section class="resume-card"><div class="resume-top">${icon("clock")} PICK UP WHERE YOU LEFT OFF <span style="margin-left:auto;font-size:10px">${esc(featured.age)} away</span></div><h2>${esc(featured.title)}</h2><p>${esc(featured.summary)}</p><div class="resume-bottom"><button class="btn primary" data-task="${featured.id}">Continue this stream ${icon("arrow")}</button><button class="btn quiet" data-catchup="${featured.id}">${icon("spark")} Catch me up</button></div></section>` : ""}<div class="block-heading"><h2>Needs your attention</h2><small>Across the selected projects</small></div>${attention()}${groups
+    .filter(([, items]) => items.length)
+    .map(
+      ([name, items]) =>
+        `<div class="block-heading"><h2>${esc(name)}</h2><small>${items.length} streams</small></div><div class="workspace-grid">${items
+          .map((t) => {
+            const desc = descendants(t.id)
+              .slice(1)
+              .map((id) => tasks.find((x) => x.id === id));
+            const done = desc.filter((x) => x.status === "done").length;
+            return `<button class="workspace-card" data-task="${t.id}"><div class="work-icon blue">${icon(projectFor(t).target === "simulator" ? "monitor" : "layers")}</div><h3>${esc(t.title)}</h3><p>${esc(t.next)}</p><div class="progress-bar"><i style="width:${desc.length ? (done / desc.length) * 100 : t.status === "done" ? 100 : 0}%"></i></div><div class="card-foot"><span>${state.grouping === "readiness" ? esc(projectFor(t).name) : desc.length ? `${done} of ${desc.length} children complete` : "No child streams"}</span><span>${esc(statusNames[readiness(t)])}</span></div></button>`;
+          })
+          .join("")}</div>`,
+    )
     .join(
       "",
-    )}</div><div class="block-heading"><h2>While you were away</h2><button class="btn quiet small" data-action="activity">All activity ${icon("arrow")}</button></div>${events
+    )}<div class="block-heading"><h2>While you were away</h2><button class="btn quiet small" data-action="activity">All activity ${icon("arrow")}</button></div>${events
+    .filter((e) => inProject(tasks.find((t) => t.id === e.task)))
     .slice(0, 3)
     .map(
       (e) =>
         `<button class="activity-mini" style="width:100%;text-align:left" data-task="${e.task}">${icon(e.icon)}<span>${esc(e.title)}</span><time>${esc(e.time)}</time></button>`,
     )
     .join("")}</div>`;
-}
-function currentCheckoutBrief() {
-  return prs[0].state === "done"
-    ? "Both checkout PRs have merged. The package comparison monitor is attached; open the workstream to check its latest evidence."
-    : "One fix shipped and passed monitoring. Package comparison is ready for review. Your next step is checking the preview, right where you left it.";
 }
 function taskView() {
   const t = current();
@@ -462,17 +624,18 @@ function taskView() {
   }
   const tabs = [
     ["overview", "Overview", null],
-    ["sessions", "Sessions", taskSessions(t.id).length],
+    ["sessions", "Agents", taskSessions(t.id).length],
+    ["terminal", "Terminal", null],
     ["changes", "Pull requests", taskPRs(t.id).length],
     ["monitors", "Monitors", taskMonitors(t.id).length],
     ["activity", "Activity", null],
   ];
-  return `<div class="breadcrumb"><button data-action="home">Workspace</button>${ancestors.map((p) => `${icon("chevron")}<button data-task="${p.id}">${esc(p.title)}</button>`).join("")}${icon("chevron")}<span>${esc(t.title)}</span></div><div class="content task-content"><div class="eyebrow">${t.parent ? "Task" : "Workstream"}</div><div class="task-heading"><h1>${esc(t.title)}</h1><div class="actions">${button("Add subtask", "new-child", "plus")}${button("Start session", "start-session", "terminal", "primary")}</div></div><div class="task-meta"><button data-action="status" style="padding:0">${pill(t.status)}</button><span>${esc(t.repo)}</span>${t.issue ? `<button data-action="source-linear" style="color:#8b929f;padding:0">${esc(t.issue)} ↗</button>` : ""}<span>Updated ${esc(t.age)} ago</span></div><nav class="tabs" aria-label="Task views">${tabs.map(([id, label, count]) => `<button class="tab ${state.tab === id ? "active" : ""}" data-tab="${id}" aria-current="${state.tab === id ? "page" : "false"}">${label}${count !== null ? `<span>${count}</span>` : ""}</button>`).join("")}</nav>${state.tab === "overview" ? overview(t) : state.tab === "sessions" ? sessionsView(t) : state.tab === "changes" ? changesView(t) : state.tab === "monitors" ? monitorsView(t) : timeline(events.filter((e) => descendants(t.id).includes(e.task)))}</div>`;
+  return `<div class="breadcrumb"><button data-action="home">Workspace</button>${ancestors.map((p) => `${icon("chevron")}<button data-task="${p.id}">${esc(p.title)}</button>`).join("")}${icon("chevron")}<span>${esc(t.title)}</span></div><div class="content task-content"><div class="eyebrow">${esc(projectFor(t).name)} · ${t.parent ? "Child stream" : "Stream"}</div><div class="task-heading"><h1>${esc(t.title)}</h1><div class="actions">${button("Add child stream", "new-child", "plus")}${button("Start session", "start-session", "terminal", "primary")}</div></div><div class="task-meta"><button data-action="status" style="padding:0">${pill(t.status)}</button><span>${esc(t.repo)}</span>${t.issue ? `<button data-action="source-linear" style="color:#8b929f;padding:0">${esc(t.issue)} ↗</button>` : ""}<span>Updated ${esc(t.age)} ago</span></div><nav class="tabs" aria-label="Task views">${tabs.map(([id, label, count]) => `<button class="tab ${state.tab === id ? "active" : ""}" data-tab="${id}" aria-current="${state.tab === id ? "page" : "false"}">${label}${count !== null ? `<span>${count}</span>` : ""}</button>`).join("")}</nav>${state.tab === "overview" ? overview(t) : state.tab === "terminal" ? terminalView(t) : state.tab === "sessions" ? sessionsView(t) : state.tab === "changes" ? changesView(t) : state.tab === "monitors" ? monitorsView(t) : timeline(events.filter((e) => descendants(t.id).includes(e.task)))}</div>`;
 }
 function overview(t) {
-  return `<section class="brief"><div class="brief-title">${icon("spark")} Where you left off <small>Maintained by your companion</small></div><p>${esc(t.summary)}</p><div class="next-step"><div><label>Your next step</label><p>${esc(t.next)}</p></div>${button(t.status === "blocked" ? "Make a decision" : t.status === "review" ? "Review change" : "Talk it through", t.status === "blocked" ? "decision" : t.status === "review" ? "review-current" : "catch-up", "arrow", "small")}</div></section><div class="block-heading"><h2>The intent</h2>${button("Edit", "edit-task", null, "quiet small")}</div><p class="description">${esc(t.description)}</p>${
+  return `<section class="brief"><div class="brief-title">${icon("spark")} Where you left off <small>Maintained by your companion</small></div><p>${esc(t.summary)}</p><div class="next-step"><div><label>Your next step</label><p>${esc(t.next)}</p></div>${button(t.status === "blocked" ? "Make a decision" : t.status === "review" ? "Review change" : "Talk it through", t.status === "blocked" ? "decision" : t.status === "review" ? "review-current" : "catch-up", "arrow", "small")}</div></section>${environmentCard(t)}<div class="block-heading"><h2>The intent</h2>${button("Edit", "edit-task", null, "quiet small")}</div><p class="description">${esc(t.description)}</p>${
     children(t.id).length
-      ? `<div class="block-heading"><h2>Tasks inside this</h2><small>${descendants(t.id).length - 1} across all levels</small></div><div class="rollup">${[
+      ? `<div class="block-heading"><h2>Streams inside this</h2><small>${descendants(t.id).length - 1} across all levels</small></div><div class="rollup">${[
           "done",
           "working",
           "review",
@@ -492,11 +655,11 @@ function overview(t) {
           .join("")}</div><div class="task-list">${children(t.id)
           .map(
             (c) =>
-              `<button class="task-list-row" data-task="${c.id}">${icon(children(c.id).length ? "layers" : "circle")}<span>${esc(c.title)}</span>${children(c.id).length ? `<small>${children(c.id).length} subtask</small>` : ""}${pill(c.status)}${icon("chevron")}</button>`,
+              `<button class="task-list-row" data-task="${c.id}">${icon(children(c.id).length ? "layers" : "circle")}<span>${esc(c.title)}</span>${children(c.id).length ? `<small>${children(c.id).length} child stream</small>` : ""}${pill(c.status)}${icon("chevron")}</button>`,
           )
           .join("")}</div>`
       : ""
-  }<div class="block-heading"><h2>Decisions to carry forward</h2></div><div class="note" style="margin-top:0">${esc(t.decision)}</div><div class="block-heading"><h2>Everything is connected</h2></div><div class="resource-grid"><button class="resource" data-action="source-linear">${icon("layers")}<div><strong>${t.issue ? `${esc(t.issue)} · Original issue` : "Working brief"}</strong><small>${t.issue ? "Linear · requirements and acceptance criteria" : "An idea can start here, before an issue exists"}</small></div></button><button class="resource" data-action="source-slack">${icon("chat")}<div><strong>${t.id === "coast" || t.id === "story" ? "Positioning conversation" : "Product discussion"}</strong><small>Slack · decisions and original context</small></div></button></div>`;
+  }<div class="block-heading"><h2>Decisions to carry forward</h2></div><div class="note" style="margin-top:0">${esc(t.decision)}</div><div class="block-heading"><h2>Everything is connected</h2></div><div class="resource-grid"><button class="resource" data-action="source-linear">${icon("layers")}<div><strong>${t.issue ? `${esc(t.issue)} · Original issue` : "Working brief"}</strong><small>${t.issue ? `${esc(t.source || "Linear")} · requirements and acceptance criteria` : "An idea can start here, before an issue exists"}</small></div></button><button class="resource" data-action="source-slack">${icon("chat")}<div><strong>${t.id === "coast" || t.id === "story" ? "Positioning conversation" : "Product discussion"}</strong><small>Slack · decisions and original context</small></div></button></div>`;
 }
 function sessionsView(t) {
   const list = taskSessions(t.id);
@@ -544,7 +707,7 @@ function companionView() {
   const key = contextKey();
   const t = current();
   const conversation = state.conversations[key] || [];
-  return `<div class="companion-head">${icon("spark")}Companion <button class="icon-button" data-action="toggle-companion" aria-label="Close companion">${icon("close")}</button></div><div class="scope"><button data-scope="task" class="${key !== "workspace" ? "active" : ""}" ${state.view !== "task" ? "disabled" : ""}>This task</button><button data-scope="workspace" class="${key === "workspace" ? "active" : ""}">Whole workspace</button></div><div class="companion-body"><div class="companion-context">${icon(key === "workspace" ? "layers" : "circle")}${esc(key === "workspace" ? "Across all your work" : t.title)}</div>${conversation.length ? conversation.map((m) => `<div class="message ${m.role}">${m.role === "assistant" ? `<div class="byline">${icon("spark")} Companion · just now</div>` : ""}${m.html || esc(m.text)}${m.action ? button(m.label, m.action, "arrow", "small") : ""}</div>`).join("") : `<h3>${key === "workspace" ? "What would you like<br>to move forward?" : "The context is still here."}</h3><p>${key === "workspace" ? "I can help you find your place, connect the pieces, and decide what comes next." : "Ask where you left off, what changed, or what to do next. I’ll follow the sessions, decisions, and changes attached to this task."}</p><div class="suggestions">${(key === "workspace" ? ["What needs me today?", "Catch me up on checkout", "Find a Linear issue"] : ["What should I do now?", "What changed while I was away?", "Start a coding session"]).map((s) => `<button class="suggestion" data-ask="${esc(s)}">${s}${icon("arrow")}</button>`).join("")}</div><div class="companion-hint">${icon("link")} ${key === "workspace" ? "Connected to your workstreams, sessions, and delivery history." : "Context stays with the task, even when the work happens elsewhere."}</div>`}</div><form class="compose" id="companion-form"><textarea id="companion-input" aria-label="Message companion" placeholder="${key === "workspace" ? "Ask about anything in your workspace…" : "Ask about this task…"}" required></textarea><div class="compose-footer"><span>Prototype responses · no model connected</span><button class="send" aria-label="Send message">${icon("send")}</button></div></form>`;
+  return `<div class="companion-head">${icon("spark")}Companion <button class="icon-button" data-action="toggle-companion" aria-label="Close companion">${icon("close")}</button></div><div class="scope"><button data-scope="task" class="${key !== "workspace" ? "active" : ""}" ${state.view !== "task" ? "disabled" : ""}>This task</button><button data-scope="workspace" class="${key === "workspace" ? "active" : ""}">Whole workspace</button></div><div class="companion-body"><div class="companion-context">${icon(key === "workspace" ? "layers" : "circle")}${esc(key === "workspace" ? "Across all your work" : t.title)}</div>${conversation.length ? conversation.map((m) => `<div class="message ${m.role}">${m.role === "assistant" ? `<div class="byline">${icon("spark")} Companion · just now</div>` : ""}${m.html || esc(m.text)}${m.action ? button(m.label, m.action, "arrow", "small") : ""}</div>`).join("") : `<h3>${key === "workspace" ? "What would you like<br>to move forward?" : "The context is still here."}</h3><p>${key === "workspace" ? "I can help you find your place, connect the pieces, and decide what comes next." : "Ask where you left off, what changed, or what to do next. I’ll follow the sessions, decisions, and changes attached to this task."}</p><div class="suggestions">${(key === "workspace" ? ["What needs me today?", "Catch me up on checkout", "Find a Linear issue"] : ["What should I do now?", "What changed while I was away?", "Start a coding session"]).map((s) => `<button class="suggestion" data-ask="${esc(s)}">${s}${icon("arrow")}</button>`).join("")}</div><div class="companion-hint">${icon("link")} ${key === "workspace" ? "Connected to your streams, sessions, and delivery history." : "Context stays with the task, even when the work happens elsewhere."}</div>`}</div><form class="compose" id="companion-form"><textarea id="companion-input" aria-label="Message companion" placeholder="${key === "workspace" ? "Ask about anything in your workspace…" : "Ask about this task…"}" required></textarea><div class="compose-footer"><span>Prototype responses · no model connected</span><button class="send" aria-label="Send message">${icon("send")}</button></div></form>`;
 }
 function ask(text) {
   const key = contextKey();
@@ -560,7 +723,7 @@ function ask(text) {
     } else if (/checkout|catch|month|away/.test(lower)) {
       html = `<strong>A smoother checkout</strong><br><br>${esc(tasks[0].summary)}<br><br><strong>Next:</strong> ${esc(tasks[0].next)}`;
       action = "resume-checkout";
-      label = "Open the checkout workstream";
+      label = "Open the checkout stream";
     } else if (/monitor|merged/.test(lower)) {
       const missing = prs.filter(
         (p) => p.state === "done" && !monitors.some((m) => m.pr === p.id),
@@ -647,13 +810,152 @@ function showModal(title, body, footer = "") {
 function closeModal() {
   $("#modal").close();
 }
+function projectOptions(selected) {
+  return projects
+    .map(
+      (p) =>
+        `<option value="${p.id}" ${p.id === selected ? "selected" : ""}>${esc(p.name)}</option>`,
+    )
+    .join("");
+}
+function parentOptions(project, parent) {
+  return `<option value="">Top-level stream</option>${tasks
+    .filter((t) => t.project === project)
+    .map(
+      (t) =>
+        `<option value="${t.id}" ${t.id === parent ? "selected" : ""}>${esc(t.title)}</option>`,
+    )
+    .join("")}`;
+}
 function newTask(parent = null, edit = false) {
-  const t = current();
+  state.importedIssue = null;
+  const t = current(),
+    project = parent
+      ? tasks.find((t) => t.id === parent).project
+      : state.project === "all"
+        ? "coastline"
+        : state.project;
   showModal(
-    edit ? "Edit task" : "Make room for a new thought",
-    `<form id="task-form" class="modal-body" data-edit="${edit ? t.id : ""}"><label for="task-title">${edit ? "Task name" : "What’s on your mind?"}</label><input class="field" id="task-title" name="title" placeholder="A bug, an idea, or something bigger…" value="${edit ? esc(t.title) : ""}" required autofocus><label for="task-description">A little context</label><textarea class="field" id="task-description" name="description" placeholder="What do you want to accomplish?">${edit ? esc(t.description) : ""}</textarea>${edit ? "" : `<label for="task-parent">Where does it belong?</label><select id="task-parent" name="parent"><option value="">New workstream</option>${tasks.map((t) => `<option value="${t.id}" ${parent === t.id ? "selected" : ""}>${esc(t.title)}</option>`).join("")}</select>`}<button class="btn primary" type="submit">${edit ? "Save changes" : "Create task"} ${icon("arrow")}</button></form>`,
+    edit ? "Edit stream" : "Start a stream",
+    `<form id="task-form" class="modal-body" data-edit="${edit ? t.id : ""}">${edit ? "" : `<div class="issue-import"><label for="issue-reference">Start from an issue, or write your own</label><div class="issue-input"><input id="issue-reference" name="reference" class="field" placeholder="Paste a Linear or GitHub issue link…"><button type="button" class="btn" data-action="resolve-issue">Fill from issue</button></div><div class="sample-links">Try a sample: <button type="button" data-sample-issue="COA-274">Linear · COA-274</button><button type="button" data-sample-issue="GH-43">GitHub · #43</button></div><p id="import-result" class="import-result" role="status">Sample issues only. No service is contacted.</p></div>`}<label for="task-title">Stream name</label><input class="field" id="task-title" name="title" placeholder="A bug, an idea, or something bigger…" value="${edit ? esc(t.title) : ""}" required><label for="task-description">What do you want to accomplish?</label><textarea class="field" id="task-description" name="description" placeholder="A little context for when you come back…">${edit ? esc(t.description) : ""}</textarea>${edit ? "" : `<div class="form-columns"><div><label for="task-project">Project</label><select name="project" id="task-project">${projectOptions(project)}</select></div><div><label for="task-parent">Inside another stream</label><select name="parent" id="task-parent">${parentOptions(project, parent)}</select></div></div><label for="task-repo">Repository</label><input class="field" id="task-repo" value="${esc(projects.find((p) => p.id === project).repo)}" readonly><p class="form-note">A working folder will be prepared when you need it.</p>`}<button class="btn primary" type="submit">${edit ? "Save changes" : "Create stream"} ${icon("arrow")}</button></form>`,
   );
-  $("#task-title").focus();
+  $(edit ? "#task-title" : "#issue-reference").focus();
+}
+function resolveIssue() {
+  const reference = $("#issue-reference").value.trim();
+  const issue = sampleIssues.find(
+    (i) =>
+      i.id.toLowerCase() === reference.toLowerCase() || i.url === reference,
+  );
+  if (!issue) {
+    state.importedIssue = null;
+    $("#import-result").textContent =
+      "This prototype can resolve the two sample issues below. Pick one to try prefill, or write your own stream.";
+    return;
+  }
+  const existing = tasks.find((t) => t.issue === issue.id);
+  if (existing) {
+    $("#import-result").innerHTML =
+      `Already linked to <button type="button" class="inline-link" data-existing-stream="${existing.id}">${esc(existing.title)}</button>.`;
+    return;
+  }
+  state.importedIssue = issue;
+  $("#task-title").value = issue.title;
+  $("#task-description").value = issue.description;
+  $("#task-project").value = issue.project;
+  $("#task-parent").innerHTML = parentOptions(issue.project, null);
+  $("#task-repo").value = projects.find((p) => p.id === issue.project).repo;
+  $("#import-result").textContent =
+    `Filled from ${issue.source} · ${issue.id}. Review or edit before creating.`;
+}
+function environmentCard(t) {
+  const env = environmentFor(t),
+    project = projectFor(t);
+  return `<section class="environment-card"><div class="environment-heading"><span class="environment-icon">${icon("folder")}</span><div><h3>Working environment</h3><p>${env ? `${esc(env.kind)}${env.owner !== t.id ? " · shared with " + esc(tasks.find((x) => x.id === env.owner).title) : ""}` : "No working folder yet · ready when you are"}</p></div>${env ? pill(env.running ? "working" : "done", env.running ? "Running" : "Ready") : pill("idea", "Not prepared")}</div>${env ? `<div class="environment-location"><code>${esc(env.path)}</code><span>${icon("branch")}${esc(env.branch)}</span></div><div class="environment-actions">${button("Terminal", "terminal", "terminal", "small")}${button(env.running ? (project.target === "web" ? "Open preview" : "Open simulator") : "Start dev environment", env.running ? "open-environment" : "dev-toggle", env.running ? "monitor" : "play", "small primary")}${button("Manage", "configure-environment", "gear", "quiet small")}</div><div class="environment-endpoint">${env.running ? `${icon("link")}${project.target === "web" ? `localhost:${env.port} · web preview` : "iPhone 16 · iOS Simulator"}${button("Stop", "dev-toggle", "stop", "quiet small")}` : "Dev environment is stopped. Your working folder and terminal are still available."}</div>` : `<div class="environment-actions">${button("Prepare environment", "configure-environment", "plus", "small")}<small>${esc(project.repo)}</small></div>`}</section>`;
+}
+function terminalView(t) {
+  const env = environmentFor(t);
+  if (!env)
+    return `${environmentCard(t)}${empty("terminal", "A shell in the right place", "Prepare a working environment to open a terminal for this stream.", button("Prepare environment", "configure-environment", "folder"))}`;
+  return `<div class="block-heading" style="margin-top:0"><div><h2>Stream terminal</h2><small>${esc(env.path)}</small></div>${button("Working environment", "dev", "folder", "small")}</div><div class="shell-view"><div class="shell-top"><span>${icon("terminal")} zsh</span><span>${esc(env.branch)}</span><button data-action="clear-terminal">Clear</button></div><pre class="shell-output">${
+    env.log.length
+      ? env.log
+          .map(
+            (entry) => `<span class="prompt">❯ ${esc(entry.command)}</span>
+${esc(entry.output)}`,
+          )
+          .join("\n\n")
+      : `Welcome back. This shell belongs to ${esc(tasks.find((t) => t.id === env.owner).title)}.
+
+Try pwd, git status, pnpm dev, or pnpm test.
+Commands are simulated; nothing executes on your machine.`
+  }</pre><form id="shell-form" class="shell-prompt"><span>❯</span><input name="command" aria-label="Terminal command" placeholder="Run a command in this working folder…" autocomplete="off" required><button class="btn small" type="submit">Run</button></form></div><p class="form-note">Ordinary commands, no coding agent required. This shell and its history stay with the working environment.</p>${env.running ? button(projectFor(t).target === "web" ? "Open preview" : "Open simulator", "open-environment", "monitor", "small") : button("Start dev environment", "dev-toggle", "play", "small")}`;
+}
+function configureEnvironment() {
+  const t = current(),
+    env = environmentFor(t),
+    parent = t.parent
+      ? environmentFor(tasks.find((x) => x.id === t.parent))
+      : null;
+  showModal(
+    "Working environment",
+    `<form id="environment-form" class="modal-body"><p class="modal-description">Choose where work on <strong>${esc(t.title)}</strong> happens. These are sample associations; no folders or processes are created.</p><label for="environment-mode">Working folder</label><select id="environment-mode" name="mode"><option value="isolated">A separate folder for this stream</option><option value="project">Use the project checkout</option>${parent ? '<option value="parent">Share the parent stream’s folder</option>' : ""}</select><div class="banner">Project checkout: <code>${esc(projectFor(t).folder)}</code>${env ? `<br>Current: <code>${esc(env.path)}</code>` : ""}</div><p class="form-note">The prototype tries creating isolated folders on demand. The worktree strategy is still open.</p><button class="btn primary" type="submit">${env ? "Update association" : "Prepare environment"}</button></form>`,
+    env
+      ? button("Review cleanup", "cleanup-environment", "folder", "quiet")
+      : "",
+  );
+}
+function openEnvironment() {
+  const t = current(),
+    project = projectFor(t),
+    env = environmentFor(t);
+  if (!env?.running) {
+    notify("Start this stream’s dev environment first.");
+    return;
+  }
+  if (project.target === "simulator") {
+    showModal(
+      "Trail Notes · iPhone simulator",
+      `<div class="modal-body"><div class="simulator"><div class="simulator-island"></div><div class="simulator-nav"><strong>Trail Notes</strong><span>${state.simulatorOffline ? "Offline" : "Connected"}</span></div><div class="trail-art">${icon("layers")}<span>37.8796° N · 122.2353° W</span></div><h2>Afternoon on the ridge</h2><p>A place to remember the little things.</p><button class="btn small" data-action="toggle-offline">${state.simulatorOffline ? "Reconnect" : "Turn on airplane mode"}</button><form id="trail-note-form"><textarea name="note" class="field" aria-label="Trail note" placeholder="Add a note from the trail…" required></textarea><button class="btn primary">Save note</button></form><small id="trail-save-status">${state.trailNote ? `${esc(state.trailNote)} · ${state.simulatorOffline ? "saved on this device" : "synced"}` : "Your notes are saved locally first."}</small></div><div class="form-note">Simulated app preview · no OS simulator is launched.</div></div>`,
+    );
+  } else if (descendants("checkout").includes(t.id)) previewModal();
+  else
+    showModal(
+      `${esc(project.name)} · web preview`,
+      `<div class="modal-body"><div class="eyebrow">localhost:${env.port} · simulated preview</div><h1>${project.id === "coast-ai" ? "The company behind Coastline." : "Your week, at a glance."}</h1><p class="description" style="margin:16px 0">${project.id === "coast-ai" ? "Technology and operations for better driving education." : "Availability is shown in your local time zone. Select a day to explore the sample calendar."}</p>${project.id === "coastline" ? `<div class="calendar-preview">${["Mon", "Tue", "Wed", "Thu", "Fri"].map((day) => `<button data-calendar-day="${day}"><strong>${day}</strong><span>9:00–12:00</span><span>13:00–17:00</span></button>`).join("")}</div><p id="calendar-selection" class="form-note">Select a day.</p>` : '<div class="note">Traffic prediction · schedule audits · instructor tools</div>'}</div>`,
+    );
+}
+function runShell(command) {
+  const env = environmentFor(current());
+  let output;
+  if (command === "pwd") output = env.path;
+  else if (command === "clear") {
+    env.log = [];
+    render();
+    return;
+  } else if (command === "git status")
+    output = `On branch ${env.branch}\nWorking tree clean (sample status).`;
+  else if (command === "ls")
+    output =
+      projectFor(current()).target === "simulator"
+        ? "TrailNotes/  TrailNotesTests/  TrailNotes.xcodeproj"
+        : "src/  public/  package.json  README.md";
+  else if (command === "pnpm dev" || command === "npm run dev") {
+    env.running = true;
+    output = `Sample dev environment ready at localhost:${env.port}.`;
+  } else if (command === "stop" || command === "exit") {
+    env.running = false;
+    output =
+      "Sample dev process stopped. The stream and shell history are retained.";
+  } else if (command === "pnpm test" || command === "npm test")
+    output =
+      "PASS  12 sample checks\nThis is illustrative output; no tests executed.";
+  else
+    output =
+      "Command recorded in this simulated shell. Try pwd, git status, ls, pnpm dev, pnpm test, or stop.";
+  env.log.push({ command, output });
+  render();
+  $("#shell-form input").focus();
 }
 function startSession() {
   showModal(
@@ -758,6 +1060,8 @@ function importLinear() {
     title: "Explain cancellation terms",
     status: "idea",
     repo: "coastline / next",
+    project: "coastline",
+    source: "Linear",
     issue: "COA-274",
     age: "a moment",
     description:
@@ -845,7 +1149,7 @@ function sourceModal(kind) {
     kind === "linear"
       ? `${esc(t.issue || "Working brief")} · ${esc(t.title)}`
       : "Product discussion · Slack",
-    `<div class="modal-body"><div class="detail-label">Linked source · sample content</div>${kind === "linear" ? `<p class="description">${esc(t.description)}</p><div class="block-heading"><h2>Acceptance criteria</h2></div><p class="description">• The change addresses the task’s stated outcome.<br>• Existing behavior remains intact.<br>• The affected flow is checked before the task is closed.</p>` : `<div class="chat-reply"><strong>Harvey · Sep 2, 10:12 AM</strong><br>${esc(t.decision)}</div><div class="chat-reply"><strong>Alex · Sep 2, 10:15 AM</strong><br>That makes sense. Let’s keep this attached to the task so we don’t have to reconstruct it next time.</div>`}<div class="banner">This source is represented inside the prototype. No external application is opened.</div></div>`,
+    `<div class="modal-body"><div class="detail-label">${esc(kind === "linear" ? t.source || "Linear" : "Slack")} · sample content</div>${kind === "linear" ? `<p class="description">${esc(t.description)}</p><div class="block-heading"><h2>Acceptance criteria</h2></div><p class="description">• The change addresses the task’s stated outcome.<br>• Existing behavior remains intact.<br>• The affected flow is checked before the task is closed.</p>` : `<div class="chat-reply"><strong>Harvey · Sep 2, 10:12 AM</strong><br>${esc(t.decision)}</div><div class="chat-reply"><strong>Alex · Sep 2, 10:15 AM</strong><br>That makes sense. Let’s keep this attached to the task so we don’t have to reconstruct it next time.</div>`}<div class="banner">This source is represented inside the prototype. No external application is opened.</div></div>`,
   );
 }
 function searchModal() {
@@ -974,7 +1278,7 @@ const actions = {
   "import-linear": () => {
     const t = importLinear();
     openTask(t.id);
-    notify("COA-274 is now part of your checkout workstream.");
+    notify("COA-274 is now part of your checkout stream.");
   },
   "session-toggle": () => {
     const s = sessions.find((s) => s.id === state.session);
@@ -1010,7 +1314,7 @@ const actions = {
     ),
   status: () =>
     showModal(
-      "Update task status",
+      "Update stream status",
       `<div class="modal-body">${Object.entries(statusNames)
         .map(
           ([k, v]) =>
@@ -1018,21 +1322,68 @@ const actions = {
         )
         .join("")}</div>`,
     ),
-  dev: () =>
-    showModal(
-      "Development workspace",
-      `<div class="modal-body"><div class="detail-label">coastline / next · sample process</div><div class="terminal"><span class="prompt">❯ pnpm dev</span>\n\n${state.dev ? "✓ Workspace dependencies ready\n✓ Local preview running\n\nRoute: /checkout/packages\nNo errors in the simulated build." : "Dev preview is stopped.\nStart it here to keep your workspace together.\n\nThis is a simulated terminal; no command will execute."}</div></div>`,
-      `${state.dev ? button("Open preview", "preview", "monitor") : ""}${button(state.dev ? "Stop preview" : "Start preview", "dev-toggle", state.dev ? "stop" : "play", "primary")}`,
-    ),
-  "dev-toggle": () => {
-    state.dev = !state.dev;
+  "resolve-issue": resolveIssue,
+  "configure-environment": configureEnvironment,
+  terminal: () => {
+    state.tab = "terminal";
     render();
-    actions.dev();
+  },
+  "clear-terminal": () => {
+    environmentFor(current()).log = [];
+    render();
+  },
+  "open-environment": openEnvironment,
+  "toggle-offline": () => {
+    state.simulatorOffline = !state.simulatorOffline;
+    openEnvironment();
+  },
+  dev: () => {
+    state.tab = "overview";
+    render();
+    document
+      .querySelector(".environment-card")
+      ?.scrollIntoView({ block: "center", behavior: "smooth" });
+  },
+  "dev-toggle": () => {
+    const env = prepareEnvironment(current());
+    env.running = !env.running;
+    event(
+      state.task,
+      env.running ? "Dev environment started" : "Dev environment stopped",
+      env.path,
+      "monitor",
+    );
+    render();
+  },
+  "cleanup-environment": () => {
+    const env = environmentFor(current());
+    const active = sessions.some(
+      (s) =>
+        s.state === "working" &&
+        environmentFor(tasks.find((t) => t.id === s.task)) === env,
+    );
+    const shares = tasks.filter(
+      (t) => t.id !== env.owner && environmentFor(t) === env,
+    );
+    showModal(
+      "Review environment cleanup",
+      `<div class="modal-body"><p class="description"><code>${esc(env.path)}</code></p><div class="note">${env.running || active ? "There is running work in this environment. Stop the dev process and agent sessions before retiring it." : shares.length ? `This folder is shared by ${shares.length} other streams. Separate them before retiring it.` : "The sample folder is clean, has no unpushed work, and has no running processes. Stream history will be retained."}</div><p class="form-note">Production cleanup rules still need design. This only removes a simulated association.</p></div>`,
+      !env.running && !active && !shares.length
+        ? button("Retire sample environment", "retire-environment", "folder")
+        : "",
+    );
+  },
+  "retire-environment": () => {
+    const env = environmentFor(current());
+    delete environments[env.owner];
+    closeModal();
+    render();
+    notify("Sample environment retired. Stream history retained.");
   },
   reset: () =>
     showModal(
       "Reset the prototype?",
-      `<div class="modal-body"><p class="description">Return to the original sample workstreams. Tasks, conversations, and simulated actions from this visit will be cleared.</p></div>`,
+      `<div class="modal-body"><p class="description">Return to the original sample streams. Tasks, conversations, and simulated actions from this visit will be cleared.</p></div>`,
       button("Keep exploring", "close-modal", null) +
         button("Reset demo", "confirm-reset", "clock", "primary"),
     ),
@@ -1041,7 +1392,23 @@ const actions = {
 document.addEventListener("click", (e) => {
   const el = e.target.closest("button");
   if (!el) return;
-  if (el.dataset.action) {
+  if (el.dataset.group) {
+    state.grouping = el.dataset.group;
+    render();
+  } else if (el.dataset.catchup) {
+    openTask(el.dataset.catchup);
+    ask("What should I do now?");
+  } else if (el.dataset.sampleIssue) {
+    const issue = sampleIssues.find((i) => i.id === el.dataset.sampleIssue);
+    $("#issue-reference").value = issue.url;
+    resolveIssue();
+  } else if (el.dataset.existingStream) {
+    closeModal();
+    openTask(el.dataset.existingStream);
+  } else if (el.dataset.calendarDay) {
+    $("#calendar-selection").textContent =
+      `${el.dataset.calendarDay}: 9:00–12:00 and 13:00–17:00 available (sample).`;
+  } else if (el.dataset.action) {
     const action = el.dataset.action;
     if (action.startsWith("pr-monitor-")) {
       const p = prs.find((p) => p.id === Number(action.split("-").pop()));
@@ -1098,7 +1465,7 @@ document.addEventListener("click", (e) => {
       tasks[0].summary = `Both checkout PRs have merged and deployed. ${m.state === "done" ? "Their monitors verified the affected flows." : "Package comparison is being observed; payment recovery is verified."}`;
       tasks[0].next =
         m.state === "done"
-          ? "Review the final evidence and close the workstream."
+          ? "Review the final evidence and close the stream."
           : "Check the package comparison monitor when observation finishes.";
       if (
         m.state === "done" &&
@@ -1155,6 +1522,34 @@ document.addEventListener("submit", (e) => {
   e.preventDefault();
   const f = e.target,
     data = new FormData(f);
+  if (f.id === "shell-form") {
+    runShell(data.get("command").trim());
+    return;
+  }
+  if (f.id === "environment-form") {
+    const mode = data.get("mode"),
+      t = current();
+    if (mode === "parent") {
+      delete environments[t.id];
+    } else {
+      const env = prepareEnvironment(t, true);
+      if (mode === "project") {
+        env.path = projectFor(t).folder;
+        env.branch = "main";
+        env.kind = "Project checkout";
+      }
+    }
+    closeModal();
+    render();
+    notify("Sample working environment linked to this stream.");
+    return;
+  }
+  if (f.id === "trail-note-form") {
+    state.trailNote = data.get("note");
+    $("#trail-save-status").textContent =
+      `${state.trailNote} · ${state.simulatorOffline ? "saved on this device, waiting to sync" : "synced"}`;
+    return;
+  }
   if (f.id === "companion-form") {
     const text = $("#companion-input").value.trim();
     if (text) ask(text);
@@ -1173,19 +1568,32 @@ document.addEventListener("submit", (e) => {
       render();
     } else {
       const parent = data.get("parent") || null;
+      const project = parent
+        ? tasks.find((t) => t.id === parent).project
+        : data.get("project");
+      const issue = state.importedIssue;
+      const existing = issue && tasks.find((t) => t.issue === issue.id);
+      if (existing) {
+        closeModal();
+        openTask(existing.id);
+        notify("Opened the existing linked stream.");
+        return;
+      }
       const t = {
         id: "task-" + Date.now(),
         parent,
+        project,
+        source: issue?.source || null,
+        sourceUrl: issue?.url || null,
         title,
         status: "idea",
-        repo: parent
-          ? tasks.find((t) => t.id === parent).repo
-          : "No repository yet",
-        issue: null,
+        repo: projects.find((p) => p.id === project).repo,
+        issue: issue?.id || null,
         age: "a moment",
         description: data.get("description") || "A new idea, ready to explore.",
-        summary:
-          "You just captured this thought. There are no coding sessions or changes yet. This is a good place to work out what success would look like.",
+        summary: issue
+          ? `Imported from ${issue.source} · ${issue.id}. The brief is attached; no coding or environment setup has started.`
+          : "You just captured this thought. No coding has started and no working folder has been created yet.",
         next: "Talk through the idea, or break out a first subtask.",
         decision: "No decisions recorded yet.",
       };
@@ -1202,6 +1610,7 @@ document.addEventListener("submit", (e) => {
     }
   }
   if (f.id === "session-form") {
+    prepareEnvironment(current());
     const s = {
       id: "s" + Date.now(),
       task: state.task,
@@ -1245,7 +1654,23 @@ document.addEventListener("submit", (e) => {
     );
   }
 });
+document.addEventListener("change", (e) => {
+  if (e.target.id === "project-filter") {
+    state.project = e.target.value;
+    state.view = "home";
+    render();
+  }
+  if (e.target.id === "task-project") {
+    $("#task-parent").innerHTML = parentOptions(e.target.value, null);
+    $("#task-repo").value = projects.find((p) => p.id === e.target.value).repo;
+  }
+});
 document.addEventListener("input", (e) => {
+  if (e.target.id === "issue-reference") {
+    state.importedIssue = null;
+    $("#import-result").textContent =
+      "Resolve this reference to attach its source.";
+  }
   if (e.target.id === "search-input")
     $("#search-results").innerHTML = searchResults(e.target.value);
 });

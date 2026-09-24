@@ -1,0 +1,302 @@
+[
+  {
+    "file": "01-workspace.png",
+    "title": "Workspace overview",
+    "caption": "All projects, recursive stream navigation, return-to-work brief, and the workspace companion.",
+    "group": "Orientation"
+  },
+  {
+    "file": "02-project-cards.png",
+    "title": "Project cards and recent activity",
+    "caption": "The lower part of the overview, including work grouped by project.",
+    "group": "Orientation"
+  },
+  {
+    "file": "03-readiness.png",
+    "title": "Across projects by readiness",
+    "caption": "One tree reordered by readiness rather than separated by project.",
+    "group": "Orientation"
+  },
+  {
+    "file": "04-project-filter.png",
+    "title": "One project in focus",
+    "caption": "Project filtering keeps the same navigation and stream model.",
+    "group": "Orientation"
+  },
+  {
+    "file": "05-needs-you.png",
+    "title": "Needs your input",
+    "caption": "Reviews and product decisions collected in one view.",
+    "group": "Orientation"
+  },
+  {
+    "file": "06-activity.png",
+    "title": "Workspace activity",
+    "caption": "A timeline of sessions, decisions, and delivery events.",
+    "group": "Orientation"
+  },
+  {
+    "file": "07-workspace-companion.png",
+    "title": "Workspace companion",
+    "caption": "Scripted example of asking what needs attention across projects.",
+    "group": "Companion"
+  },
+  {
+    "file": "08-stream-overview.png",
+    "title": "Stream overview",
+    "caption": "The parent stream retains intent, next action, working environment, and artifacts.",
+    "group": "Streams"
+  },
+  {
+    "file": "09-stream-catchup.png",
+    "title": "Return after time away",
+    "caption": "The companion summarizes previous sessions and PRs and offers a next step.",
+    "group": "Companion"
+  },
+  {
+    "file": "10-stream-context.png",
+    "title": "Children, decisions, and sources",
+    "caption": "The lower overview preserves recursive work and links to original context.",
+    "group": "Streams"
+  },
+  {
+    "file": "11-shared-environment.png",
+    "title": "Child stream and shared environment",
+    "caption": "The child visibly shares its parent\u2019s folder while retaining its own context.",
+    "group": "Environments"
+  },
+  {
+    "file": "12-linear-source.png",
+    "title": "Linked issue context",
+    "caption": "An issue\u2019s description and acceptance criteria are available within the stream.",
+    "group": "Sources"
+  },
+  {
+    "file": "13-slack-source.png",
+    "title": "Linked discussion",
+    "caption": "A product decision remains attached to its original discussion.",
+    "group": "Sources"
+  },
+  {
+    "file": "14-child-stream.png",
+    "title": "Create a child stream",
+    "caption": "The creation form can place new work inside another stream.",
+    "group": "Creation"
+  },
+  {
+    "file": "15-new-stream.png",
+    "title": "Create a stream",
+    "caption": "One creation flow supports an idea or a referenced external issue.",
+    "group": "Creation"
+  },
+  {
+    "file": "16-linear-import.png",
+    "title": "Prefill from Linear",
+    "caption": "A sample Linear reference supplies editable title, description, and project.",
+    "group": "Creation"
+  },
+  {
+    "file": "17-github-import.png",
+    "title": "Prefill from GitHub",
+    "caption": "A sample GitHub issue switches the suggested project to Trail Notes.",
+    "group": "Creation"
+  },
+  {
+    "file": "18-search.png",
+    "title": "Find an existing stream",
+    "caption": "Workspace search supports subjects and issue references.",
+    "group": "Orientation"
+  },
+  {
+    "file": "19-status.png",
+    "title": "Change stream status",
+    "caption": "Explicit stream state remains distinct from individual PR and agent state.",
+    "group": "Streams"
+  },
+  {
+    "file": "20-environment-association.png",
+    "title": "Choose a working folder",
+    "caption": "Explore a separate stream folder, project checkout, or parent sharing. These choices remain open.",
+    "group": "Environments"
+  },
+  {
+    "file": "21-stream-terminal.png",
+    "title": "Ordinary stream terminal",
+    "caption": "A shell associated with the stream\u2019s folder, separate from coding-agent sessions. All commands are simulated.",
+    "group": "Environments"
+  },
+  {
+    "file": "22-running-environment.png",
+    "title": "Running web environment",
+    "caption": "The overview exposes the preview entry point and process controls.",
+    "group": "Environments"
+  },
+  {
+    "file": "23-web-preview.png",
+    "title": "Web product preview",
+    "caption": "A sample checkout can be tried without leaving the workspace.",
+    "group": "Environments"
+  },
+  {
+    "file": "24-cleanup.png",
+    "title": "Review environment cleanup",
+    "caption": "The mock explains running work or sharing before allowing retirement.",
+    "group": "Environments"
+  },
+  {
+    "file": "25-agents.png",
+    "title": "Multiple agent sessions",
+    "caption": "Claude Code and Codex attempts remain attached to the same stream.",
+    "group": "Agents"
+  },
+  {
+    "file": "26-start-agent.png",
+    "title": "Start an agent session",
+    "caption": "Choose a provider and initial instruction, with conversation or terminal presentation.",
+    "group": "Agents"
+  },
+  {
+    "file": "27-agent-chat.png",
+    "title": "Agent conversation",
+    "caption": "An existing coding session can be reviewed and continued.",
+    "group": "Agents"
+  },
+  {
+    "file": "28-agent-terminal.png",
+    "title": "Agent terminal presentation",
+    "caption": "The same agent session viewed in its terminal interface.",
+    "group": "Agents"
+  },
+  {
+    "file": "29-pull-requests.png",
+    "title": "Pull requests on a stream",
+    "caption": "PRs are attached artifacts with independent delivery states.",
+    "group": "Delivery"
+  },
+  {
+    "file": "30-pr-review.png",
+    "title": "Review a pull request",
+    "caption": "Checks, illustrative diff, preview, and merge action gathered in context.",
+    "group": "Delivery"
+  },
+  {
+    "file": "31-monitor-awaiting.png",
+    "title": "Merged, waiting for deployment",
+    "caption": "The merge hook attaches a monitor; merge alone does not mean verified.",
+    "group": "Delivery"
+  },
+  {
+    "file": "32-monitor-observing.png",
+    "title": "Deployment under observation",
+    "caption": "Production observation and flow verification are separate steps.",
+    "group": "Delivery"
+  },
+  {
+    "file": "33-monitor-verified.png",
+    "title": "Verified delivery",
+    "caption": "A simulated completed monitor supplies outcome evidence.",
+    "group": "Delivery"
+  },
+  {
+    "file": "34-stream-activity.png",
+    "title": "Stream delivery history",
+    "caption": "Merge, deployment, and verification events remain attached to the work.",
+    "group": "Delivery"
+  },
+  {
+    "file": "35-decision-needed.png",
+    "title": "A stream awaiting a decision",
+    "caption": "An unresolved product choice is surfaced as the next action.",
+    "group": "Decisions"
+  },
+  {
+    "file": "36-decision-dialog.png",
+    "title": "Resolve a product decision",
+    "caption": "The choice becomes context for the next implementation session.",
+    "group": "Decisions"
+  },
+  {
+    "file": "37-running-agent.png",
+    "title": "Agent still working",
+    "caption": "An active session can receive follow-up instructions or finish a simulated turn.",
+    "group": "Agents"
+  },
+  {
+    "file": "38-calendar-preview.png",
+    "title": "Another stream\u2019s dev preview",
+    "caption": "A second web project entry point stays tied to its own working environment.",
+    "group": "Environments"
+  },
+  {
+    "file": "39-idea-stream.png",
+    "title": "An idea before coding",
+    "caption": "A stream can retain intent and decisions before any folder or coding session exists.",
+    "group": "Streams"
+  },
+  {
+    "file": "40-unprepared-terminal.png",
+    "title": "Terminal before environment setup",
+    "caption": "The mock prompts for an environment when the stream has no working folder.",
+    "group": "Environments"
+  },
+  {
+    "file": "41-empty-agents.png",
+    "title": "No coding sessions yet",
+    "caption": "The empty state offers the first coding session without losing stream context.",
+    "group": "Agents"
+  },
+  {
+    "file": "42-empty-prs.png",
+    "title": "No pull requests yet",
+    "caption": "Streams can exist and be useful before producing a PR.",
+    "group": "Delivery"
+  },
+  {
+    "file": "43-empty-monitors.png",
+    "title": "No monitors yet",
+    "caption": "The monitor empty state explains the relationship to delivery.",
+    "group": "Delivery"
+  },
+  {
+    "file": "44-mobile-stream.png",
+    "title": "A mobile project stream",
+    "caption": "The same overview points to a simulator instead of a web preview.",
+    "group": "Environments"
+  },
+  {
+    "file": "45-simulator.png",
+    "title": "Simulator entry point",
+    "caption": "A local mock of the mobile product, shown within the workspace.",
+    "group": "Environments"
+  },
+  {
+    "file": "46-simulator-offline.png",
+    "title": "Try the mobile flow offline",
+    "caption": "The simulated app saves a note locally and waits to sync.",
+    "group": "Environments"
+  },
+  {
+    "file": "47-hooks.png",
+    "title": "Hooks and automations",
+    "caption": "External events trigger actions on streams through the same conceptual interface.",
+    "group": "Automation"
+  },
+  {
+    "file": "48-hook-replay.png",
+    "title": "Event replay and execution history",
+    "caption": "Replaying the already-merged PR event avoids duplicate work.",
+    "group": "Automation"
+  },
+  {
+    "file": "49-settings.png",
+    "title": "Workspace settings",
+    "caption": "Sample connected sources, coding agents, and companion scope. Bottom controls are slated to move into a name flyout.",
+    "group": "Workspace"
+  },
+  {
+    "file": "50-focused-overview.png",
+    "title": "Overview with companion collapsed",
+    "caption": "A wider working area when the companion is not needed.",
+    "group": "Streams"
+  }
+]

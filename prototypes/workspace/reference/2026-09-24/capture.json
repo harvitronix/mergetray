@@ -1,0 +1,16 @@
+{
+  "captured": "2026-09-24",
+  "viewport": {
+    "width": 1440,
+    "height": 1000
+  },
+  "screenshotCount": 50,
+  "branch": "matt/mergetray-workspace-wireframe",
+  "baseCommit": "e16a0f57b7932cef7362a0baf54751f0c3e52200",
+  "includesUncommittedPrototypeChanges": true,
+  "sourceSHA256": {
+    "index.html": "4bd5ed59ae779d850bfe26f8c0bd8e953f1fbb86ee368ff2dfa842647ce4b111",
+    "app.js": "669f617a6520641ac22065a4e009d2d8287787db296e2ad27f0f7f16413d6819",
+    "style.css": "b30106160592b29df9a7087d04ce6e0f797fc7e25f478e4ec6b9f47a6c4cb1ce"
+  }
+}

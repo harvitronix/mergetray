@@ -24,3 +24,7 @@ Open http://localhost:51248. You can also open `index.html` directly.
 Task and workspace companion conversations are separate in this prototype. This is an interaction experiment, not a commitment to separate underlying agents.
 
 Use **Reset demo** in the bottom bar to return to the initial scenario. No real PRs are merged, no processes are started by the UI, and no services are contacted. The Python server serves only this folder.
+
+## Screenshot reference
+
+The [September 24 visual gallery](reference/2026-09-24/index.html) preserves the main screens and interaction states for implementation planning. Browse the [annotated index](reference/2026-09-24/README.md) for direct PNG links and known follow-ups. These are workflow references, not pixel-perfect requirements.
